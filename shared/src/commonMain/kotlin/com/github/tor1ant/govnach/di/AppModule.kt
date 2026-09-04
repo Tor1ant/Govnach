@@ -1,6 +1,7 @@
 package com.github.tor1ant.govnach.di
 
 import com.github.tor1ant.govnach.client.Client
+import com.github.tor1ant.govnach.ui.model.HomeViewModel
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
@@ -31,4 +32,5 @@ val appModule = module {
         )
     }
     single { Client(get()) }
+    single { HomeViewModel(client = get()) }
 }

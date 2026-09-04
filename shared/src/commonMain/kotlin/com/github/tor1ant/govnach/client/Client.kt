@@ -4,9 +4,7 @@ import org.openapitools.client.apis.DefaultApi
 import org.openapitools.client.models.Board
 
 class Client(
-
     private val client: DefaultApi
-
 ) {
 
     suspend fun getBoards(): List<Board> {
