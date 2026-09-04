@@ -6,9 +6,7 @@ info:
   contact:
     email: admin@2ch.hk
 servers:
-  - url: 'http://127.0.0.1'
   - url: 'https://2ch.hk'
-  - url: 'https://beta.2ch.hk'
 
 paths:
   /api/mobile/v2/boards:
@@ -509,7 +507,7 @@ components:
         - passcode
         - nocaptcha
 
-    File:
+    FileModel:
       type: object
       description: Модель файла.
       properties:
@@ -699,7 +697,7 @@ components:
         files:
           type: array
           items:
-            $ref: '#/components/schemas/File'
+            $ref: '#/components/schemas/FileModel'
         views:
           type: integer
         sticky:
