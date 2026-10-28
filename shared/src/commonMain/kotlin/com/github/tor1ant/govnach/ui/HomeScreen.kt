@@ -48,19 +48,10 @@ fun HomeScreen(
                 }
 
                 uiState.error != null -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = uiState.error ?: "Неизвестная ошибка",
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                        Button(onClick = { /* TODO: Retry */ }) {
-                            Text("Повторить")
-                        }
-                    }
+                    ErrorState(
+                        message = uiState.error ?: "Неизвестная ошибка",
+                        onRetry = { viewModel.loadBoards() }
+                    )
                 }
 
                 else -> {
@@ -243,6 +234,14 @@ fun BoardCard(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Открыть треды доски →",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

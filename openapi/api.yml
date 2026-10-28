@@ -20,6 +20,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Boards'
 
+  /{board}/catalog.json:
+    get:
+      summary: Получение списка тредов доски.
+      description: |
+        Список тредов доски в формате, который двач отдаёт своему фронтенду (HTML JSON API).
+        Относится к неофициальной части апи: формат ответа может измениться без предупреждения.
+      parameters:
+        - in: path
+          name: board
+          schema:
+            type: string
+          required: true
+          description: ID доски, например, b.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogThreads'
+
   /api/mobile/v2/after/{board}/{thread}/{num}:
     get:
       summary: Получение постов в треде >= указанного. Не рекомендуется использовать для получения треда целиком, только для проверки новых постов.
@@ -444,6 +465,10 @@ components:
         - -22
         - -23
 
+        - -50
+        - -51
+        - -52
+
         - -300
         - -301
         - -302
@@ -524,7 +549,23 @@ components:
         md5:
           type: string
         type:
-          $ref: '#/components/schemas/FileType'
+          type: integer
+          description: |
+            Тип файла. Значения совпадают с FileType, но здесь тип намеренно integer:
+            двач периодически добавляет новые типы (например, webp), и строгий enum
+            ронял бы разбор всего ответа.
+            * 0 FileTypeNone
+            * 1 FileTypeJpg
+            * 2 FileTypePng
+            * 3 FileTypeAPng
+            * 4 FileTypeGif
+            * 5 FileTypeBmp
+            * 6 FileTypeWebm
+            * 7 FileTypeMp3
+            * 8 FileTypeOgg
+            * 9 FileTypeWebp
+            * 10 FileTypeMp4
+            * 100 FileTypeSticker
         size:
           type: integer
           description: Размер файла, в КБ.
@@ -671,6 +712,87 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/Board'
+
+    ThreadPreview:
+      type: object
+      description: |
+        Тред в списке доски (catalog.json). По составу полей совпадает с Post,
+        но дополнен счётчиками треда.
+      properties:
+        num:
+          type: integer
+          description: Номер треда.
+        parent:
+          type: integer
+        board:
+          type: string
+        timestamp:
+          type: integer
+        lasthit:
+          type: integer
+        date:
+          type: string
+        email:
+          type: string
+        subject:
+          type: string
+        comment:
+          type: string
+          description: Комментарий ОП-поста с HTML разметкой.
+        files:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/FileModel'
+        posts_count:
+          type: integer
+          description: Количество постов в треде.
+        files_count:
+          type: integer
+          description: Количество файлов в треде.
+        views:
+          type: integer
+        sticky:
+          type: integer
+          description: Если > 0, тред прилеплен.
+        endless:
+          type: integer
+          description: Если > 0, тред бесконечный.
+        closed:
+          type: integer
+          description: Если > 0, тред закрыт.
+        banned:
+          type: integer
+        op:
+          type: integer
+        name:
+          type: string
+        trip:
+          type: string
+        tags:
+          type: string
+        likes:
+          type: integer
+        dislikes:
+          type: integer
+      required:
+        - num
+        - parent
+        - board
+        - timestamp
+        - date
+        - comment
+
+    CatalogThreads:
+      type: object
+      description: Ответ catalog.json доски. Прочие поля (реклама, баннеры, настройки доски) здесь не описаны.
+      properties:
+        filter:
+          type: string
+        threads:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreadPreview'
 
     Post:
       type: object

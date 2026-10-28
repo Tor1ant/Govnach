@@ -27,16 +27,14 @@ class HomeViewModel(
         loadBoards()
     }
 
-    private fun loadBoards() {
+    fun loadBoards() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                // TODO: Загрузить данные с сервера
-                // Пока что используем мок-данные
-                val mockBoards = getBoards()
+                val boards = client.getBoards()
                 _uiState.value = _uiState.value.copy(
-                    boards = mockBoards,
+                    boards = boards,
                     isLoading = false
                 )
             } catch (e: Exception) {
@@ -67,10 +65,6 @@ class HomeViewModel(
             .filter { it.isNotEmpty() }
             .distinct()
             .sorted()
-    }
-
-    private suspend fun getBoards(): List<Board> {
-        return client.getBoards();
     }
 }
 
