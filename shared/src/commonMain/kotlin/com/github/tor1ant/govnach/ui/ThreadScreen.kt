@@ -1,18 +1,20 @@
 package com.github.tor1ant.govnach.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.tor1ant.govnach.client.Client
 import com.github.tor1ant.govnach.ui.media.FileKind
 import com.github.tor1ant.govnach.ui.media.FileMetaLine
 import com.github.tor1ant.govnach.ui.media.FileThumb
@@ -25,26 +27,56 @@ import com.github.tor1ant.govnach.ui.media.kind
 import com.github.tor1ant.govnach.ui.media.mediaPlatformContext
 import com.github.tor1ant.govnach.ui.model.ThreadViewModel
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
+import com.github.tor1ant.govnach.client.Client
 import org.koin.compose.koinInject
+import org.openapitools.client.models.Board
 import org.openapitools.client.models.FileModel
 import org.openapitools.client.models.Post
 
 /**
- * Тред: посты от ОП-поста до последнего. Открыть его можно с экрана доски.
+ * Тред: посты от ОП-поста до последнего плюс композер ответа.
+ * Открыть его можно с экрана доски.
  */
 @Composable
 fun ThreadScreen(
-    boardId: String,
-    boardName: String,
+    board: Board,
     threadNum: Int,
     threadSubject: String = "",
     onBack: () -> Unit
 ) {
-    val client: Client = koinInject()
+    val boardId = board.id
     val mediaOpener: PlatformMediaOpener = koinInject()
     val mediaContext = mediaPlatformContext
-    val viewModel = remember(boardId, threadNum) { ThreadViewModel(client, boardId, threadNum) }
+    val client: Client = koinInject()
+    val viewModel = remember(boardId, threadNum) { ThreadViewModel(client, boardId = boardId, threadNum = threadNum) }
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    var comment by remember(boardId, threadNum) { mutableStateOf("") }
+    val commentFocus = remember { FocusRequester() }
+
+    val threadClosed = uiState.posts.firstOrNull()?.closed?.let { it > 0 } ?: false
+    val canReply = board.enablePosting && !threadClosed && !uiState.isLoading && uiState.posts.isNotEmpty()
+    val composerHint = when {
+        !board.enablePosting -> "/$boardId/: постинг запрещён"
+        threadClosed -> "Тред закрыт: отвечать нельзя"
+        else -> null
+    }
+
+    LaunchedEffect(uiState.postedNum, uiState.postError) {
+        when {
+            uiState.postedNum != null -> {
+                snackbarHostState.showSnackbar("Ответ опубликован: № ${uiState.postedNum}")
+                comment = ""
+                viewModel.consumePostResult()
+            }
+
+            uiState.postError != null -> {
+                snackbarHostState.showSnackbar(uiState.postError ?: "Не удалось отправить пост")
+                viewModel.consumePostResult()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -53,7 +85,7 @@ fun ThreadScreen(
                     Column {
                         Text("/$boardId/$threadNum", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = threadSubject.ifEmpty { boardName },
+                            text = threadSubject.ifEmpty { board.name },
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -66,50 +98,94 @@ fun ThreadScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-
-                uiState.error != null -> {
-                    ErrorState(
-                        message = uiState.error ?: "Неизвестная ошибка",
-                        onRetry = { viewModel.loadPosts() }
-                    )
-                }
-
-                else -> {
-                    var viewingFile: FileModel? by remember { mutableStateOf(null) }
-                    var playingFile: FileModel? by remember { mutableStateOf(null) }
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.posts, key = { it.num }) { post ->
-                            PostCard(
-                                post = post,
-                                onImageClick = { viewingFile = it },
-                                onVideoClick = { playingFile = it },
-                                onExternalClick = { file -> mediaOpener.open(mediaContext, MediaPaths.src(file)) }
-                            )
-                        }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                when {
+                    uiState.isLoading -> {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
 
-                    viewingFile?.let { file -> ImageViewer(file = file, onDismiss = { viewingFile = null }) }
-                    playingFile?.let { file -> LocalPlayerDialog(file = file, onDismiss = { playingFile = null }) }
+                    uiState.error != null -> {
+                        ErrorState(
+                            message = uiState.error ?: "Неизвестная ошибка",
+                            onRetry = { viewModel.loadPosts() }
+                        )
+                    }
+
+                    else -> {
+                        var viewingFile: FileModel? by remember { mutableStateOf(null) }
+                        var playingFile: FileModel? by remember { mutableStateOf(null) }
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(uiState.posts, key = { it.num }) { post ->
+                                PostCard(
+                                    post = post,
+                                    onImageClick = { viewingFile = it },
+                                    onVideoClick = { playingFile = it },
+                                    onExternalClick = { file -> mediaOpener.open(mediaContext, MediaPaths.src(file)) },
+                                    onReplyTo = if (canReply) {
+                                        {
+                                            comment = appendCrosspost(comment, post.num)
+                                            commentFocus.requestFocus()
+                                        }
+                                    } else {
+                                        null
+                                    }
+                                )
+                            }
+                        }
+
+                        viewingFile?.let { file -> ImageViewer(file = file, onDismiss = { viewingFile = null }) }
+                        playingFile?.let { file -> LocalPlayerDialog(file = file, onDismiss = { playingFile = null }) }
+                    }
                 }
             }
+
+            PostingComposer(
+                board = board,
+                threadNum = threadNum,
+                comment = comment,
+                onCommentChange = { comment = it },
+                commentFocus = commentFocus,
+                enabled = canReply,
+                hint = composerHint,
+                isPosting = uiState.isPosting,
+                onSend = { draft -> viewModel.sendDraft(draft) }
+            )
+        }
+
+        uiState.captcha?.let { captcha ->
+            EmojiCaptchaDialog(
+                captcha = captcha,
+                picks = uiState.captchaPicks,
+                isBusy = uiState.isCaptchaBusy,
+                error = uiState.captchaError,
+                onEmojiClick = { index -> viewModel.clickCaptcha(index) },
+                onRefresh = { viewModel.refreshCaptcha() },
+                onCancel = { viewModel.cancelCaptcha() }
+            )
         }
     }
+}
+
+private fun appendCrosspost(comment: String, postNum: Int): String {
+    val reference = ">>$postNum "
+    return if (comment.contains(reference.removeSuffix(" "))) comment else comment + reference
 }
 
 @Composable
@@ -117,7 +193,8 @@ fun PostCard(
     post: Post,
     onImageClick: (FileModel) -> Unit = {},
     onVideoClick: (FileModel) -> Unit = {},
-    onExternalClick: (FileModel) -> Unit = {}
+    onExternalClick: (FileModel) -> Unit = {},
+    onReplyTo: (() -> Unit)? = null
 ) {
     val isOp = post.parent == 0
     val comment = post.comment.htmlToPlainText()
@@ -156,7 +233,15 @@ fun PostCard(
                         text = "№ ${post.num}",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = onReplyTo
+                            ?.let { handler ->
+                                Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable(onClick = handler)
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            }
+                            ?: Modifier
                     )
 
                     val name = buildString {

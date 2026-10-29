@@ -1,6 +1,7 @@
 package com.github.tor1ant.govnach
 
 import com.github.tor1ant.govnach.client.Client
+import com.github.tor1ant.govnach.client.PostingDraft
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
@@ -59,6 +60,25 @@ class RealApiSmokeTest {
             println("info: num=${info.num} posts=${info.posts} timestamp=${info.timestamp}")
             assertTrue(info.num == thread.num, "info должен вернуть номер треда")
             assertTrue(info.timestamp > 0, "info должен вернуть время создания треда")
+        }
+    }
+
+    /**
+     * Без emoji-капчи и без ключей приложения отправка должна отваливаться локально, до сети.
+     */
+    @Test
+    fun postWithoutCaptchaAndKeysFailsFast() {
+        if (System.getenv("GOVNACH_APP_PUBLIC_KEY") != null || System.getenv("GOVNACH_APP_PRIVATE_KEY") != null) return
+
+        runBlocking {
+            val failure = runCatching {
+                client().post(PostingDraft(boardId = "b", threadNum = 1, comment = "проверка"))
+            }.exceptionOrNull()
+
+            assertTrue(
+                failure is IllegalStateException && failure.message?.contains("капчу") == true,
+                "без капчи и ключей постинг должен отклоняться локально с внятным сообщением"
+            )
         }
     }
 }

@@ -6,23 +6,25 @@ import androidx.compose.runtime.toMutableStateList
 import org.openapitools.client.models.Board as ApiBoard
 
 /**
- * Экраны приложения: доска -> тред.
+ * Экраны приложения: доска -> тред, плюс отдельный экран создания треда.
  */
 sealed interface AppRoute {
     data object Home : AppRoute
 
     data class Board(val board: ApiBoard) : AppRoute
 
+    /** Создание нового треда на доске — пост без номера. */
+    data class NewThread(val board: ApiBoard) : AppRoute
+
     data class Thread(
-        val boardId: String,
-        val boardName: String,
+        val board: ApiBoard,
         val threadNum: Int,
         val threadSubject: String = ""
     ) : AppRoute
 }
 
 /**
- * Простой back stack без навигационной библиотеки: достаточно трёх экранов,
+ * Простой back stack без навигационной библиотеки: достаточно нескольких экранов,
  * а зависимость от navigation-compose для KMP пока не добавляем.
  */
 class AppNavigator(startRoute: AppRoute = AppRoute.Home) {
@@ -39,8 +41,21 @@ class AppNavigator(startRoute: AppRoute = AppRoute.Home) {
         push(AppRoute.Board(board))
     }
 
-    fun openThread(boardId: String, boardName: String, threadNum: Int, threadSubject: String = "") {
-        push(AppRoute.Thread(boardId, boardName, threadNum, threadSubject))
+    fun openNewThread(board: ApiBoard) {
+        push(AppRoute.NewThread(board))
+    }
+
+    /** Замена экрана создания треда на свежеоткрытый тред, если пользователь уже там. */
+    fun replaceWithThread(board: ApiBoard, threadNum: Int, threadSubject: String = "") {
+        val route = AppRoute.Thread(board, threadNum, threadSubject)
+        if (stack.lastOrNull() is AppRoute.NewThread) {
+            stack.removeAt(stack.lastIndex)
+        }
+        push(route)
+    }
+
+    fun openThread(board: ApiBoard, threadNum: Int, threadSubject: String = "") {
+        push(AppRoute.Thread(board, threadNum, threadSubject))
     }
 
     fun back() {

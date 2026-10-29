@@ -177,8 +177,8 @@ paths:
                   type: string
                   description: ID капчи из метода /id.
                 emojiNumber:
-                  type: number
-                  description: Номер эмодзи из клавитуры. Нумерация начинается с 0.
+                  type: integer
+                  description: Номер эмодзи из клавиатуры. Нумерация начинается с 0.
               required:
                 - captchaTokenID
                 - emojiNumber
@@ -253,6 +253,15 @@ paths:
                   description: Если не включено в настройках доски - поле будет проигнорировано.
                 comment:
                   type: string
+                app_response_id:
+                  type: string
+                  description: ID из /api/captcha/app/id/{public_key}, обязателен при captcha_type=appid.
+                app_response:
+                  type: string
+                  description: sha256(app_response_id + '|' + private key), обязателен при captcha_type=appid.
+                emoji_captcha_id:
+                  type: string
+                  description: ID после решения emoji капчи, обязателен при captcha_type=emoji_captcha.
                 icon:
                   type: integer
                 op_mark:
@@ -435,48 +444,11 @@ components:
 
         * -24 ErrorWrongStickerID, некорректный идентификатор стикера.
         * -25 ErrorStickerNotFound, стикер не найден.
-      enum:
-        - 0
-        - 403
-        - 666
-        - 667
 
-        - -2
-        - -3
-        - -31
-        - -4
-        - -41
-        - -42
-        - -5
-        - -6
-        - -7
-        - -8
-        - -9
-        - -10
-        - -11
-        - -12
-        - -13
-        - -14
-        - -15
-        - -16
-        - -19
-        - -20
-        - -21
-        - -22
-        - -23
-
-        - -50
-        - -51
-        - -52
-
-        - -300
-        - -301
-        - -302
-        - -303
-        - -304
-
-        - -24
-        - -25
+        Список выше — справочник для клиента, а не строгий enum: двач периодически
+        добавляет коды, и ронять из-за неизвестного кода разбор всего ответа нельзя
+        (тот же подход, что у FileModel.type).
+      # Коды ошибки оставлены integer: см. описание выше, строгий enum ронял бы разбор ответа.
 
     Error:
       type: object
@@ -526,11 +498,14 @@ components:
         app_response - sha256(app_response_id + '|' + private_key)
         * passcode: cookie passcode_auth
         * nocaptcha: капча не требуется, никакие дополнительные параметры тоже.
+        * emoji: именно это значение приходит в ответе /api/captcha/emoji/id (реальный ответ), хотя
+        для отправки поста captcha_type=emoji_captcha — так у двача в апи, см. ниже.
       enum:
         - emoji_captcha
         - appid
         - passcode
         - nocaptcha
+        - emoji
 
     FileModel:
       type: object
@@ -663,8 +638,12 @@ components:
             description: Например, webm/jpeg/png/etc.
         max_comment:
           type: integer
+          description: Максимальная длина комментария, в символах.
         max_files_size:
           type: integer
+          description: |
+            Максимальный размер файлов, в КБ — как и FileModel.size. Например, 40960 на /b/,
+            что означает 40 МБ суммарно на пост.
         tags:
           type: array
           description: Массив тегов, которые доступны на этой доске, если они включены.
@@ -931,27 +910,23 @@ components:
         - id
 
     EmojiCaptchaShow:
-      oneOf:
-        - type: object
-          properties:
-            image:
-              type: string
-              description: PNG изображение содержащие "корректные" emoji, закодированное в base64
-            keyboard:
-              type: array
-              items:
-                type: string
-              description: Массив PNG изображений, составляющий "клавиатуру" для выбора "корректного" emoji. Каждое изображение закодировано base64.
-          required:
-            - image
-            - keyboard
-        - type: object
-          properties:
-            success:
-              type: string
-              description: ID для использования в /posting как "emoji_captcha_id".
-          required:
-            - success
+      type: object
+      description: |
+        Состояние emoji капчи. Успешный клик отвечает только `success`, а промежуточные шаги
+        присылают новую `image` и `keyboard` без `success` — поэтому поля необязательные
+        (oneOf с обязательными полями ронял разбор реального ответа).
+      properties:
+        image:
+          type: string
+          description: PNG изображение с "корректными" emoji, закодированное в base64.
+        keyboard:
+          type: array
+          items:
+            type: string
+          description: Массив PNG изображений ("клавиатура") для выбора "корректного" emoji, каждое в base64.
+        success:
+          type: string
+          description: ID для использования в /posting как "emoji_captcha_id".
 
     PostingNewThread:
       type: object

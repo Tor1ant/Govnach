@@ -19,12 +19,14 @@ import org.openapitools.client.models.Board
 import org.openapitools.client.models.ThreadPreview
 
 /**
- * Доска: список тредов. Клик по треду открывает сам тред.
+ * Доска: список тредов. Клик по треду открывает сам тред,
+ * кнопка в шапке — создание нового треда (когда доска разрешает постинг).
  */
 @Composable
 fun BoardScreen(
     board: Board,
     onThreadClick: (ThreadPreview) -> Unit,
+    onNewThreadClick: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val client: Client = koinInject()
@@ -46,6 +48,13 @@ fun BoardScreen(
                     }
                 },
                 navigationIcon = { BackButton(onClick = onBack) },
+                actions = {
+                    if (onNewThreadClick != null && board.enablePosting) {
+                        TextButton(onClick = onNewThreadClick) {
+                            Text("+ новый тред")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
