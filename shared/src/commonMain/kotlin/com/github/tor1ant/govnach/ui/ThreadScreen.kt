@@ -13,6 +13,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.Client
+import com.github.tor1ant.govnach.ui.media.FileKind
+import com.github.tor1ant.govnach.ui.media.FileMetaLine
+import com.github.tor1ant.govnach.ui.media.FileThumb
+import com.github.tor1ant.govnach.ui.media.ImageViewer
+import com.github.tor1ant.govnach.ui.media.LocalPlayerDialog
+import com.github.tor1ant.govnach.ui.media.MediaPaths
+import com.github.tor1ant.govnach.ui.media.PlatformMediaOpener
+import com.github.tor1ant.govnach.ui.media.formatSizeKb
+import com.github.tor1ant.govnach.ui.media.kind
+import com.github.tor1ant.govnach.ui.media.mediaPlatformContext
 import com.github.tor1ant.govnach.ui.model.ThreadViewModel
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
@@ -31,6 +41,8 @@ fun ThreadScreen(
     onBack: () -> Unit
 ) {
     val client: Client = koinInject()
+    val mediaOpener: PlatformMediaOpener = koinInject()
+    val mediaContext = mediaPlatformContext
     val viewModel = remember(boardId, threadNum) { ThreadViewModel(client, boardId, threadNum) }
     val uiState by viewModel.uiState.collectAsState()
 
@@ -74,15 +86,26 @@ fun ThreadScreen(
                 }
 
                 else -> {
+                    var viewingFile: FileModel? by remember { mutableStateOf(null) }
+                    var playingFile: FileModel? by remember { mutableStateOf(null) }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(uiState.posts, key = { it.num }) { post ->
-                            PostCard(post = post)
+                            PostCard(
+                                post = post,
+                                onImageClick = { viewingFile = it },
+                                onVideoClick = { playingFile = it },
+                                onExternalClick = { file -> mediaOpener.open(mediaContext, MediaPaths.src(file)) }
+                            )
                         }
                     }
+
+                    viewingFile?.let { file -> ImageViewer(file = file, onDismiss = { viewingFile = null }) }
+                    playingFile?.let { file -> LocalPlayerDialog(file = file, onDismiss = { playingFile = null }) }
                 }
             }
         }
@@ -90,7 +113,12 @@ fun ThreadScreen(
 }
 
 @Composable
-fun PostCard(post: Post) {
+fun PostCard(
+    post: Post,
+    onImageClick: (FileModel) -> Unit = {},
+    onVideoClick: (FileModel) -> Unit = {},
+    onExternalClick: (FileModel) -> Unit = {}
+) {
     val isOp = post.parent == 0
     val comment = post.comment.htmlToPlainText()
 
@@ -186,7 +214,12 @@ fun PostCard(post: Post) {
             val files = post.files.orEmpty()
             if (files.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                FilesList(files)
+                PostMedia(
+                    files = files,
+                    onImageClick = onImageClick,
+                    onVideoClick = onVideoClick,
+                    onExternalClick = onExternalClick
+                )
             }
 
             val likes = post.likes ?: 0
@@ -204,25 +237,64 @@ fun PostCard(post: Post) {
 }
 
 @Composable
-private fun FilesList(files: List<FileModel>) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun PostMedia(
+    files: List<FileModel>,
+    onImageClick: (FileModel) -> Unit,
+    onVideoClick: (FileModel) -> Unit,
+    onExternalClick: (FileModel) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         files.forEach { file ->
-            Text(
-                text = buildString {
-                    append("📎 ")
-                    append(file.displayname.ifEmpty { file.name })
-                    append(" · ")
-                    append(file.propertySize)
-                    append(" КБ · ")
-                    append(file.width)
-                    append("×")
-                    append(file.height)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            when (file.kind()) {
+                FileKind.Image -> {
+                    FileThumb(file = file, onClick = { onImageClick(file) })
+                    FileMetaLine(file = file, extra = file.duration.orEmpty().ifEmpty { null })
+                }
+
+                FileKind.Video -> {
+                    FileThumb(file = file, onClick = { onVideoClick(file) })
+                    FileMetaLine(
+                        file = file,
+                        extra = buildString {
+                            append("▶ video")
+                            file.duration?.ifEmpty { null }?.let { append(" · $it") }
+                        }
+                    )
+                }
+
+                FileKind.Audio -> {
+                    TextButton(onClick = { onExternalClick(file) }) {
+                        Text(
+                            text = buildString {
+                                append("🎵 ")
+                                append(file.displayname.ifEmpty { file.name })
+                                append(" · ")
+                                append(formatSizeKb(file.propertySize))
+                                file.duration?.ifEmpty { null }?.let { append(" · $it") }
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                FileKind.Sticker, FileKind.Other -> {
+                    TextButton(onClick = { onExternalClick(file) }) {
+                        Text(
+                            text = buildString {
+                                append(if (file.kind() == FileKind.Sticker) "🃏 стикер" else "📎 ")
+                                append(file.displayname.ifEmpty { file.name })
+                                append(" · ")
+                                append(formatSizeKb(file.propertySize))
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
         }
     }
 }

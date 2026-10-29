@@ -1,13 +1,18 @@
 package com.github.tor1ant.govnach.di
 
 import com.github.tor1ant.govnach.client.Client
+import com.github.tor1ant.govnach.ui.media.MediaImageLoader
+import com.github.tor1ant.govnach.ui.media.platformMediaOpener
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.serialization.kotlinx.json.*
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
+import okhttp3.Cache
 import org.koin.dsl.module
 import org.openapitools.client.apis.DefaultApi
+import java.io.File
 
 val appModule = module {
 
@@ -22,7 +27,7 @@ val appModule = module {
 
                         // ХАК ДЛЯ OPENAPI: явно регистрируем контекстные сериализаторы,
                         // если генератор пытается запрашивать List напрямую
-                        serializersModule = SerializersModule {
+                        serializersModule = kotlinx.serialization.modules.SerializersModule {
                             // Здесь при необходимости можно добавить кастомные модули,
                             // но часто включение правильного контекста сериализации решает проблему
                         }
@@ -31,6 +36,23 @@ val appModule = module {
             }
         )
     }
+
+    /**
+     * Отдельный клиент для медиа без content negotiation: тянет сырые байты,
+     * диск-кэш okhttp переиспользует превью и картинки между проходами по треду.
+     */
+    single {
+        HttpClient(OkHttp) {
+            engine {
+                config {
+                    cache(Cache(File(System.getProperty("java.io.tmpdir"), "govnach-media-cache"), 64L * 1024 * 1024))
+                }
+            }
+        }
+    }
+
+    single { MediaImageLoader(get()) }
+    single { platformMediaOpener() }
     single { Client(get()) }
     single { HomeViewModel(client = get()) }
 }

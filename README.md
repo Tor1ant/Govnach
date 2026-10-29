@@ -35,6 +35,25 @@ This is a Kotlin Multiplatform project targeting Android, Desktop (JVM).
 - Треды доски: `GET /{board}/catalog.json` — это HTML JSON API двача, официальной частью апи не является.
 - Посты треда: `GET /api/mobile/v2/after/{board}/{thread}/{num}`, идём от номера треда и докупаем хвост.
 
+### Медиа в треде
+
+Посты треда показывают медиа, а не только текст:
+
+- Картинки (jpg/png/gif/webp/bmp/apng) — превью по `FileModel.thumbnail`, клик открывает полноэкранный
+  просмотр исходника по `FileModel.path` с зумом (колесо/пинч) и паном. GIF/webp играются как статичный
+  первый кадр — декодер один кадр и умеет.
+- Видео (mp4/webm) — превью с меткой и длительностью; клик открывает плеер: на Android inline через
+  media3/ExoPlayer ([VideoPlayer.android.kt](shared/src/androidMain/kotlin/com/github/tor1ant/govnach/ui/media/VideoPlayer.android.kt)),
+  на desktop — системный плеер/браузер
+  ([VideoPlayer.desktopApp.kt](shared/src/desktopAppMain/kotlin/com/github/tor1ant/govnach/ui/media/VideoPlayer.desktopApp.kt)),
+  потому что video-рендеринга в swing-окне compose desktop нет.
+- Аудио, стикеры и прочие файлы — кнопка «открыть в системе».
+- nsfw-файлы размыты до тапа.
+
+Загрузка картинок: `MediaImageLoader` качает байты отдельным ktor-клиентом с okhttp disk-кэшем
+(AppModule) и декодирует в `ImageBitmap`, битмапы держит в LRU-кэше. Пути к файлам собирает
+`MediaPaths` из `FileModel.path`/`thumbnail` — они относительные, base совпадает с `ApiClient.BASE_URL`.
+
 ### Running the apps
 
 Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and
