@@ -13,10 +13,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.Client
 import com.github.tor1ant.govnach.ui.model.BoardViewModel
+import com.github.tor1ant.govnach.ui.media.FileKind
+import com.github.tor1ant.govnach.ui.media.FileThumb
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
 import org.openapitools.client.models.ThreadPreview
+import com.github.tor1ant.govnach.ui.media.kind
 
 /**
  * Доска: список тредов. Клик по треду открывает сам тред,
@@ -132,6 +135,9 @@ fun ThreadCard(
                 ThreadBadges(thread)
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+            ThreadOpThumbs(thread, onClick = onClick)
+
             if (comment.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -168,6 +174,30 @@ fun ThreadCard(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Превью медиаконтент ОП-поста треда: картинк и видео рисует превью, прочие только анималь.
+ */
+@Composable
+private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit) {
+    val thumbs = thread.files.orEmpty().filter {
+        val kind = it.kind()
+        kind == FileKind.Image || kind == FileKind.Video
+    }
+
+    if (thumbs.isEmpty()) return
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        thumbs.take(3).forEach { file ->
+            FileThumb(
+                file = file,
+                onClick = onClick,
+                maxThumbWidth = 140f,
+                maxThumbHeight = 100f
+            )
         }
     }
 }
