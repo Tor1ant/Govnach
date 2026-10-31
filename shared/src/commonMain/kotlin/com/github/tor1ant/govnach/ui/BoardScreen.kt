@@ -179,7 +179,7 @@ fun ThreadCard(
 }
 
 /**
- * Превью медиаконтент ОП-поста треда: картинк и видео рисует превью, прочие только анималь.
+ * Превью медиаконтент ОП-поста треда: картинк и видео рисует превью
  */
 @Composable
 private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit) {

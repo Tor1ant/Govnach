@@ -25,11 +25,7 @@ val appModule = module {
                         isLenient = true
                         encodeDefaults = true
 
-                        // ХАК ДЛЯ OPENAPI: явно регистрируем контекстные сериализаторы,
-                        // если генератор пытается запрашивать List напрямую
                         serializersModule = kotlinx.serialization.modules.SerializersModule {
-                            // Здесь при необходимости можно добавить кастомные модули,
-                            // но часто включение правильного контекста сериализации решает проблему
                         }
                     })
                 }

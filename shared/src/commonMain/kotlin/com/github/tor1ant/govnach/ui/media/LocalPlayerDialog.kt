@@ -18,8 +18,8 @@ import androidx.compose.ui.window.DialogProperties
 import org.openapitools.client.models.FileModel
 
 /**
- * Диалог воспроизведения видео: на android inline через media3, на desktop — кнопка
- * «открыть в системе» (см. actual VideoPlayer).
+ * Диалог воспроизведения видео: видео играет прямо в приложении на всех платформах
+ * (см. VideoPlayer).
  */
 @Composable
 fun LocalPlayerDialog(

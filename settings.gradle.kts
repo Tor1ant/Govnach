@@ -32,5 +32,5 @@ plugins {
 }
 
 include(":androidApp")
-include(":desktopApp")
+# TEMP: include(":desktopApp")
 include(":shared")
