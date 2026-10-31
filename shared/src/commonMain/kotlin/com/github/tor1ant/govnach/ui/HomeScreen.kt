@@ -29,7 +29,7 @@ fun HomeScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            AppTopBar(title = { Text("Двач") })
+            AppTopBar(title = { HomeTopBarTitle() })
         }
     ) { paddingValues ->
         Box(
@@ -38,6 +38,10 @@ fun HomeScreen(
                 .padding(paddingValues)
         ) {
             when {
+                // Первую загрузку закрывает заставка в App: пустой экран при запуске
+                // не должен показывать второй спиннер поверх логотипа.
+                uiState.isLoading && uiState.boards.isEmpty() -> Unit
+
                 uiState.isLoading -> {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center)
@@ -92,6 +96,15 @@ fun HomeScreen(
             onDismiss = { askAdult = false }
         )
     }
+}
+
+/**
+ * Заголовок главной: вместо текстового «Двач» — сам логотип. Высота фиксирована,
+ * чтобы шапка не прыгала, пока знак подгружается.
+ */
+@Composable
+private fun HomeTopBarTitle() {
+    AppLogo(modifier = Modifier.height(AppLogoHeight))
 }
 
 /**

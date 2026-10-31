@@ -119,6 +119,47 @@ This is a Kotlin Multiplatform project targeting Android, Desktop (JVM).
   в живом прогоне его не было ни у одного файла, — поэтому в треде взрослой доски превью
   стартуют размытыми и открываются тапом (`isAdultContent(nsfw, adultBoard)`).
 
+### Логотип и иконки
+
+Логотип — оранжевая стрелка двача, вектор без фона. Геометрия знака описана один раз
+(вершины стрелки в координатах официального логотипа из шапки [2ch.hk](https://2ch.hk)) —
+в [tools/gen_logo.py](tools/gen_logo.py); из неё собираются и иконки лаунчера/ярлыка, и знак
+на экране запуска, чтобы проекции не разошлись.
+
+- Векторы приложения — в `shared/src/commonMain/composeResources/drawable`:
+  - [twoch_logo.xml](shared/src/commonMain/composeResources/drawable/twoch_logo.xml) — знак «2CH» целиком
+    (градиентная стрелка и буквы), используется на экране запуска и на главной;
+  - [twoch_emblem.xml](shared/src/commonMain/composeResources/drawable/twoch_emblem.xml) — только стрелка,
+    отцентрована в безопасной зоне 108dp: из неё сделана иконка лаунчера Android.
+  Рисует их [AppLogo.kt](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/ui/AppLogo.kt).
+- Генераторы (детерминированные, повторный запуск не меняет файлы):
+  `python tools/gen_logo.py` — векторы приложения и `ic_launcher_foreground.xml`;
+  `python tools/gen_android_icons.py` — mipmap-PNG для API < 26;
+  `python tools/gen_desktop_icons.py` — иконки окна и ярлыка. Всем трём для растеризации
+  нужен `resvg-py` (путь передаётся в `RESVG_PATH`).
+- Android: адаптивная иконка в [mipmap-anydpi-v26](androidApp/src/main/res/mipmap-anydpi-v26/ic_launcher.xml) —
+  только foreground без подложки плюс `monochrome` для themed icons 13+. На API < 26 лаунчер берёт
+  `mipmap-*/ic_launcher.png` — их рисует `gen_android_icons.py` в тех же пропорциях.
+- Desktop, две разные иконки, и это осознанно:
+  - **окно, заголовок и панель задач** — [desktopApp/icons/govnach-window.ico](desktopApp/icons/govnach-window.ico)
+    и кадры `window-<N>.png` (16–64px): стрелка без подложки, каждый размер нарисован отдельно.
+    [main.kt](desktopApp/src/main/kotlin/com/github/tor1ant/govnach/main.kt) отдаёт их AWT как
+    `MultiResolutionImage`. Иначе быть не может: Windows просит иконку заголовка размером
+    `SM_CXSMICON` (16px, 24/32 при масштабе 150–200%), а `sun.awt.SunToolkit.getScaledIconImage`
+    при выборе кадра округляет масштаб до 1/N и рисует билинейно без сохранения пропорций — одна
+    крупная картинка доезжает до 16px мутным пятном. С кадрами «один-к-одному» масштабирования нет.
+  - **ярлык, «Пуск», MSI, док macOS** — [govnach.ico](desktopApp/icons/govnach.ico),
+    [govnach-setup.ico](desktopApp/icons/govnach-setup.ico), [govnach.icns](desktopApp/icons/govnach.icns):
+    тот же знак на тёмной скруглённой плашке. Это про читаемость, а не декор: у стрелки перед
+    подложкой серебристый блик, и на светлом фоне ярлыка она почти не видна (контраст по формуле
+    WCAG был 1.5:1). На `#1A1A1A` он 6:1, и та же плашка совпадает с тёмной палитрой приложения.
+- Заголовок окна — `Govnach`; имя задаётся константой `APP_NAME` в `main.kt`.
+- Экран запуска: пока список досок грузится впервые, вместо пустого экрана показывается
+  логотип со спиннером ([StartupScreen.kt](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/ui/StartupScreen.kt)).
+  Повторные загрузки (кнопка «повторить», перезаход на главную) заставку не открывают.
+- `2ch.png` в корне — исходная растровая картинка (400x300 с белым фоном), в приложение не попадает:
+  для вектора используется SVG.
+
 ### Running the apps
 
 Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and
