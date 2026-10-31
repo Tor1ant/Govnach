@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.github.tor1ant.govnach.client.isAdult
+import com.github.tor1ant.govnach.ui.model.AdultAccess
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
@@ -22,6 +24,7 @@ fun HomeScreen(
 ) {
     val viewModel: HomeViewModel = koinInject()
     val uiState by viewModel.uiState.collectAsState()
+    var askAdult by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -59,6 +62,16 @@ fun HomeScreen(
                             onCategorySelected = { viewModel.selectCategory(it) }
                         )
 
+                        // Доски 18+ спрятаны до подтверждения возраста: подсказка вместо списка
+                        if (uiState.adultAccess == AdultAccess.HIDDEN) {
+                            AdultBoardsNotice(
+                                hiddenBoards = uiState.hiddenAdultBoards,
+                                onEnable = { askAdult = true }
+                            )
+                        } else {
+                            AdultBoardsHideRow(onHide = { viewModel.hideAdult() })
+                        }
+
                         // Список досок
                         BoardsList(
                             boards = viewModel.getFilteredBoards(),
@@ -67,6 +80,39 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (askAdult) {
+        AdultGateDialog(
+            onConfirm = {
+                askAdult = false
+                viewModel.allowAdult()
+            },
+            onDismiss = { askAdult = false }
+        )
+    }
+}
+
+/**
+ * Пока взрослые доски разрешены — маленькая строка, чтобы их можно было спрятать обратно.
+ */
+@Composable
+private fun AdultBoardsHideRow(onHide: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "Доски 18+ показаны",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onHide) {
+            Text("Скрыть")
         }
     }
 }
@@ -222,9 +268,10 @@ fun BoardCard(
             ) {
                 // Категория
                 Text(
-                    text = board.category,
+                    text = if (board.isAdult()) "🔞 ${board.category}" else board.category,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (board.isAdult()) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)

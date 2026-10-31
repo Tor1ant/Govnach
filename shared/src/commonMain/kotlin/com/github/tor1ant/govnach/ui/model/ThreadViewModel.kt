@@ -41,9 +41,8 @@ class ThreadViewModel(
     /** Черновик, который ждёт решения капчи. */
     private var pendingDraft: PostingDraft? = null
 
-    init {
-        loadPosts()
-    }
+    // Загрузку запускает экран: на взрослой доске без подтверждения возраста тред
+    // не запрашивается вовсе (см. ThreadScreen).
 
     /** [silent] — перезагрузка без спиннера: список остаётся на экране. */
     fun loadPosts(silent: Boolean = false) {
