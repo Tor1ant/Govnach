@@ -1,5 +1,10 @@
 package com.github.tor1ant.govnach.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -69,6 +74,9 @@ fun ThreadScreen(
 
     var comment by remember(boardId, threadNum) { mutableStateOf("") }
     val commentFocus = remember { FocusRequester() }
+    // Композер скрыт, пока его не откроют: он занимал нижнюю треть экрана и закрывал ленту.
+    // Открывают его кнопка «ответить в тред» в шапке или клик по номеру поста.
+    var composerOpen by remember(boardId, threadNum) { mutableStateOf(false) }
 
     // До подтверждения возраста тред не запрашиваем вовсе: контент не должен приезжать в память
     // и на экран раньше решения. Как только гейт пройден, загрузка стартует.
@@ -86,6 +94,11 @@ fun ThreadScreen(
     BackHandler(enabled = mediaOverlayOpen) {
         viewingFile = null
         playingFile = null
+    }
+
+    // ...затем скрывает открытый композер, и только после этого выходит из треда.
+    BackHandler(enabled = !mediaOverlayOpen && composerOpen) {
+        composerOpen = false
     }
 
     val threadClosed = uiState.posts.firstOrNull()?.closed?.let { it > 0 } ?: false
@@ -113,6 +126,19 @@ fun ThreadScreen(
         }
     }
 
+    // Открыть композер из шапки — и сразу поставить в него фокус.
+    fun openComposer() {
+        if (canReply) composerOpen = true
+    }
+
+    // Клик по номеру поста: открыть композер, вставить кросспост и сфокусировать поле.
+    fun replyTo(postNum: Int) {
+        if (!canReply) return
+        comment = appendCrosspost(comment, postNum)
+        composerOpen = true
+        commentFocus.requestFocus()
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -129,7 +155,16 @@ fun ThreadScreen(
                         )
                     }
                 },
-                navigationIcon = { BackButton(onClick = onBack) }
+                navigationIcon = { BackButton(onClick = onBack) },
+                actions = {
+                    // Композер скрыт по умолчанию, поэтому открыть его без ответа на конкретный пост
+                    // можно только отсюда. Пока треда нет (или он закрыт) — не зовём впустую.
+                    if (canReply && !composerOpen) {
+                        TextButton(onClick = { openComposer() }) {
+                            Text("ответить в тред", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -187,10 +222,7 @@ fun ThreadScreen(
                                                 )
                                             },
                                             onReplyTo = if (canReply) {
-                                                {
-                                                    comment = appendCrosspost(comment, post.num)
-                                                    commentFocus.requestFocus()
-                                                }
+                                                { replyTo(post.num) }
                                             } else {
                                                 null
                                             }
@@ -201,17 +233,24 @@ fun ThreadScreen(
                         }
                     }
 
-                    PostingComposer(
-                        board = board,
-                        threadNum = threadNum,
-                        comment = comment,
-                        onCommentChange = { comment = it },
-                        commentFocus = commentFocus,
-                        enabled = canReply,
-                        hint = composerHint,
-                        isPosting = uiState.isPosting,
-                        onSend = { draft -> viewModel.sendDraft(draft) }
-                    )
+                    AnimatedVisibility(
+                        visible = composerOpen,
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                    ) {
+                        PostingComposer(
+                            board = board,
+                            threadNum = threadNum,
+                            comment = comment,
+                            onCommentChange = { comment = it },
+                            commentFocus = commentFocus,
+                            enabled = canReply,
+                            hint = composerHint,
+                            isPosting = uiState.isPosting,
+                            onClose = { composerOpen = false },
+                            onSend = { draft -> viewModel.sendDraft(draft) }
+                        )
+                    }
                 }
 
                 // Просмотр медиа: на desktop открывается отдельное окно ОС, на Android —
