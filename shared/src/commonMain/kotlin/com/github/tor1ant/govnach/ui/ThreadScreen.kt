@@ -1,6 +1,6 @@
 package com.github.tor1ant.govnach.ui
 
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -94,24 +94,22 @@ fun ThreadScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = {
                     Column {
                         Text("/$boardId/$threadNum", style = MaterialTheme.typography.titleMedium)
                         Text(
                             text = threadSubject.ifEmpty { board.name },
                             style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
-                navigationIcon = { BackButton(onClick = onBack) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                navigationIcon = { BackButton(onClick = onBack) }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -238,20 +236,22 @@ fun PostCard(
     val comment = post.comment.htmlToPlainText()
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .let {
-                if (isOp) {
-                    it.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    it
-                }
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isOp) {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLowest
             },
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isOp) 3.dp else 1.dp)
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = if (isOp) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        }
     ) {
         Column(
             modifier = Modifier

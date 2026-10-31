@@ -1,6 +1,5 @@
 package com.github.tor1ant.govnach.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,14 +36,16 @@ fun BoardScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = {
                     Column {
                         Text("/${board.id}/", style = MaterialTheme.typography.titleMedium)
                         Text(
                             text = board.name,
                             style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -54,14 +55,10 @@ fun BoardScreen(
                 actions = {
                     if (onNewThreadClick != null && board.enablePosting) {
                         TextButton(onClick = onNewThreadClick) {
-                            Text("+ новый тред")
+                            Text("+ тред", style = MaterialTheme.typography.labelLarge)
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                }
             )
         }
     ) { paddingValues ->
@@ -82,11 +79,15 @@ fun BoardScreen(
                     )
                 }
 
+                uiState.threads.isEmpty() -> {
+                    EmptyState(text = "На доске пока нет тредов")
+                }
+
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(uiState.threads, key = { it.num }) { thread ->
                             ThreadCard(
@@ -108,25 +109,21 @@ fun ThreadCard(
 ) {
     val comment = thread.comment.htmlToPlainText()
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    AppCard(onClick = onClick) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Text(
                     text = thread.subject?.ifEmpty { null } ?: comment.ifEmpty { "Тред ${thread.num}" },
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -135,14 +132,13 @@ fun ThreadCard(
                 ThreadBadges(thread)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            ThreadOpThumbs(thread, onClick = onClick)
+            ThreadOpThumbs(thread = thread, onClick = onClick)
 
             if (comment.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = comment.snippet(160),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
@@ -153,7 +149,8 @@ fun ThreadCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "/${thread.board}/${thread.num}",
@@ -161,18 +158,11 @@ fun ThreadCard(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Постов: ${thread.postsCount ?: 0}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Файлов: ${thread.filesCount ?: 0}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = "постов: ${thread.postsCount ?: 0} · файлов: ${thread.filesCount ?: 0}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -189,6 +179,8 @@ private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit) {
     }
 
     if (thumbs.isEmpty()) return
+
+    Spacer(modifier = Modifier.height(8.dp))
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         thumbs.take(3).forEach { file ->
@@ -209,48 +201,41 @@ private fun ThreadBadges(thread: ThreadPreview) {
 
     if (!sticky && !closed) return
 
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(start = 8.dp)
+    ) {
         if (sticky) {
-            Badge(containerColor = MaterialTheme.colorScheme.secondary) {
+            Badge(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
                 Text("📌", style = MaterialTheme.typography.labelSmall)
             }
         }
         if (closed) {
-            Badge(containerColor = MaterialTheme.colorScheme.error) {
+            Badge(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ) {
                 Text("🔒", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
 }
 
-/**
- * Кнопка возврата на экран вверх. Иконки не тянем — dependency на material-icons не добавляем.
- */
+/** Пустой список: подсказка по центру вместо пустого экрана. */
 @Composable
-fun BackButton(onClick: () -> Unit) {
-    TextButton(onClick = onClick) {
-        Text("←", style = MaterialTheme.typography.titleMedium)
-    }
-}
-
-@Composable
-fun ErrorState(
-    message: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+fun EmptyState(text: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Text(text = message, color = MaterialTheme.colorScheme.error)
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onRetry) {
-            Text("Повторить")
-        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

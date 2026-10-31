@@ -1,5 +1,6 @@
 package com.github.tor1ant.govnach.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -64,7 +65,10 @@ fun PostingComposer(
             .fillMaxWidth()
             .imePadding(),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 3.dp
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        // Панель отделяется от ленты тонкой линией сверху: тени в тёмной теме почти не видно.
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),

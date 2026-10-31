@@ -55,24 +55,22 @@ fun NewThreadScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = {
                     Column {
                         Text("/${board.id}/ · новый тред", style = MaterialTheme.typography.titleMedium)
                         Text(
                             text = board.name,
                             style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
-                navigationIcon = { BackButton(onClick = onBack) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                navigationIcon = { BackButton(onClick = onBack) }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
