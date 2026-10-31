@@ -15,9 +15,7 @@ fun App(
     navigator: AppNavigator = rememberAppNavigator()
 ) {
     MaterialTheme() {
-        val route = navigator.currentRoute
-
-        when (route) {
+        when (val route = navigator.currentRoute) {
             AppRoute.Home -> HomeScreen(
                 onBoardClick = { board -> navigator.openBoard(board) }
             )

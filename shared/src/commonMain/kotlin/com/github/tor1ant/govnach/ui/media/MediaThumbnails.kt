@@ -1,31 +1,22 @@
 package com.github.tor1ant.govnach.ui.media
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
 import org.openapitools.client.models.FileModel
@@ -145,75 +136,9 @@ fun FileMetaLine(file: FileModel, extra: String? = null) {
 }
 
 /**
- * Полноэкранный просмотр картинки: колесо/пинч — зум, перетаскивание — пан, двойной тап — сброс.
+ * Превью файла в посте: размеры известны из метаданных, поэтому лента не прыгает
+ * по высоте, пока картинка догружается.
  */
-@Composable
-fun ImageViewer(
-    file: FileModel,
-    onDismiss: () -> Unit
-) {
-    val fullRatio = aspectRatioOf(file.width, file.height)
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(color = MaterialTheme.colorScheme.surface) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = file.displayname.ifEmpty { file.name }.htmlToPlainText(),
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = onDismiss) { Text("✕") }
-                }
-
-                var scale by remember(file) { mutableFloatStateOf(1f) }
-                var offset by remember(file) { mutableStateOf(Offset.Zero) }
-
-                AsyncMediaImage(
-                    url = MediaPaths.src(file),
-                    aspectRatio = fullRatio,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            translationX = offset.x
-                            translationY = offset.y
-                        }
-                        .pointerInput(file) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    if (event.changes.none { it.pressed }) break
-                                    scale = (scale * event.calculateZoom()).coerceIn(1f, 6f)
-                                    offset += event.calculatePan()
-                                    event.changes.forEach { it.consume() }
-                                }
-                            }
-                        }
-                        .pointerInput(file) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                }
-                            )
-                        }
-                )
-            }
-        }
-    }
-}
-
 private fun aspectRatioOf(width: Int, height: Int): Float =
     if (width > 0 && height > 0) width.toFloat() / height.toFloat() else 1f
 
