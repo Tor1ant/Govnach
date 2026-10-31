@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.github.tor1ant.govnach.client.isAdultContent
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
 import org.openapitools.client.models.FileModel
@@ -67,15 +68,21 @@ private fun MediaImageLoader.observe(url: String): State<ImageBitmap?> = produce
     value = peek(url) ?: load(url)
 }
 
+/**
+ * Превью файла. Взрослый ли контент, решает [isAdultContent]: флаг `nsfw` от двача,
+ * а если его нет — признак взрослой доски ([adultBoard]). Взрослое превью размыто до тапа.
+ */
 @Composable
 fun FileThumb(
     file: FileModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     maxThumbWidth: Float = 250f,
-    maxThumbHeight: Float = 180f
+    maxThumbHeight: Float = 180f,
+    adultBoard: Boolean = false
 ) {
-    var revealed by remember(file) { mutableStateOf((file.nsfw ?: -1) < 0) }
+    val adult = isAdultContent(file.nsfw, adultBoard)
+    var revealed by remember(file, adult) { mutableStateOf(!adult) }
 
     val tnUrl = MediaPaths.thumbnail(file)
     val tnWidth = file.tnWidth.takeIf { it > 0 } ?: file.width

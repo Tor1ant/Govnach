@@ -91,6 +91,29 @@ This is a Kotlin Multiplatform project targeting Android, Desktop (JVM).
 - Ошибки двача показываются снэкбаром: если сам двач не прислал текст, к коду добавляется подпись из
   `errorCodeMessage`. После успешной отправки тред перезагружается без спиннера.
 
+### Доски «для взрослых»
+
+Доски категории «Взрослым» (`/sex/`, `/fag/`, `/fur/` и остальные из этой категории) в апи
+ничем не отличаются от обычных: `enable_posting=true`, те же `max_comment` и `max_files_size`.
+Признак ровно один — `category` в `/api/mobile/v2/boards`, его проверяет `Board.isAdult()`
+([AdultContent.kt](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/client/AdultContent.kt)).
+
+- Гейт — подтверждение возраста «Мне есть 18»: до него взрослые доски не показываются в списке
+  (вместо них — плашка «Скрыто досок 18+: N» с кнопкой «Показать»), категория «Взрослым» отсутствует
+  в фильтре, треды по ним не открываются и композер выключен. После подтверждения чтение и постинг —
+  как на любой другой доске; на главной есть кнопка «Скрыть», чтобы вернуть запрет.
+- Состояние — `AdultAccess` в [HomeViewModel](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/ui/model/HomeViewModel.kt)
+  (singleton в Koin), поэтому разрешения одного экрана хватает всем остальным. Живёт до перезапуска
+  приложения: тему настроек не трогаем, второй шаг «Мне есть 18» делается один раз.
+- UI гейта: [AdultGate.kt](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/ui/AdultGate.kt)
+  (`AdultGateDialog`, `AdultBoardsNotice`, `AdultLockedState`). Экраны доски, создания треда и треда
+  получают `adultAllowed` и `onAdultConfirmed` из [App](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/App.kt).
+  Минус подхода: категорию в апи могут переименовать — тогда `/sex/` перестанет считаться
+  взрослой, и гейт надо обновить вместе с [ADULT_CATEGORY](shared/src/commonMain/kotlin/com/github/tor1ant/govnach/client/AdultContent.kt).
+- Размытие медиа не зависит от гейта: `FileModel.nsfw` двач заполняет не везде — на `/fag/`
+  в живом прогоне его не было ни у одного файла, — поэтому в треде взрослой доски превью
+  стартуют размытыми и открываются тапом (`isAdultContent(nsfw, adultBoard)`).
+
 ### Running the apps
 
 Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and
@@ -110,6 +133,10 @@ Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
   настройкам доски ([PostingValidationTest](shared/src/desktopAppTest/kotlin/com/github/tor1ant/govnach/PostingValidationTest.kt)).
 - Прогон по реальному апи двача (обращается в сеть, по умолчанию пропускается):
   `GOVNACH_API_TEST=1 ./gradlew :shared:desktopAppTest`
+- Живая проверка взрослых досок — список, треды, посты и выдача emoji капчи, без постинга:
+  `GOVNACH_API_TEST=1 ./gradlew :shared:desktopAppTest --tests "*AdultBoardsApiTest*"`
+  ([AdultBoardsApiTest](shared/src/desktopAppTest/kotlin/com/github/tor1ant/govnach/AdultBoardsApiTest.kt)).
+  Офлайн-проверка признака доски и размытия — [AdultBoardsTest](shared/src/desktopAppTest/kotlin/com/github/tor1ant/govnach/AdultBoardsTest.kt).
 - Живая проверка эмодзи-капчи (id → картинка → клики, без отправки поста):
   `GOVNACH_CAPTCHA_TEST=1 ./gradlew :shared:desktopAppTest --tests "*EmojiCaptchaSmokeTest*"`
   ([EmojiCaptchaSmokeTest](shared/src/desktopAppTest/kotlin/com/github/tor1ant/govnach/EmojiCaptchaSmokeTest.kt)).

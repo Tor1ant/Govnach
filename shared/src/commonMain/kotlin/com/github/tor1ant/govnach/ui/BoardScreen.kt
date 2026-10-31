@@ -11,6 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.Client
+import com.github.tor1ant.govnach.client.isAdult
+import com.github.tor1ant.govnach.client.needsAdultConfirmation
 import com.github.tor1ant.govnach.ui.model.BoardViewModel
 import com.github.tor1ant.govnach.ui.media.FileKind
 import com.github.tor1ant.govnach.ui.media.FileThumb
@@ -23,17 +25,31 @@ import com.github.tor1ant.govnach.ui.media.kind
 /**
  * Доска: список тредов. Клик по треду открывает сам тред,
  * кнопка в шапке — создание нового треда (когда доска разрешает постинг).
+ *
+ * [adultAllowed] — подтвердил ли пользователь возраст. Пока для взрослой доски это false,
+ * треды не грузятся, клики по ним и кнопка нового треда не работают: вместо контента —
+ * [AdultLockedState] с подтверждением.
  */
 @Composable
 fun BoardScreen(
     board: Board,
     onThreadClick: (ThreadPreview) -> Unit,
     onNewThreadClick: (() -> Unit)? = null,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    adultAllowed: Boolean = true,
+    onAdultConfirmed: () -> Unit = {}
 ) {
     val client: Client = koinInject()
+    val adultBoard = board.isAdult()
+    val locked = needsAdultConfirmation(board, adultAllowed)
     val viewModel = remember(board.id) { BoardViewModel(client, board) }
     val uiState by viewModel.uiState.collectAsState()
+    var askAdult by remember(board.id) { mutableStateOf(false) }
+
+    // Открыли взрослую доску без подтверждения — сразу спрашиваем возраст, а не показываем треды.
+    LaunchedEffect(board.id) {
+        if (locked) askAdult = true
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -41,7 +57,10 @@ fun BoardScreen(
             AppTopBar(
                 title = {
                     Column {
-                        Text("/${board.id}/", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = if (adultBoard) "🔞 /${board.id}/" else "/${board.id}/",
+                            style = MaterialTheme.typography.titleMedium
+                        )
                         Text(
                             text = board.name,
                             style = MaterialTheme.typography.bodySmall,
@@ -53,7 +72,7 @@ fun BoardScreen(
                 },
                 navigationIcon = { BackButton(onClick = onBack) },
                 actions = {
-                    if (onNewThreadClick != null && board.enablePosting) {
+                    if (onNewThreadClick != null && board.enablePosting && !locked) {
                         TextButton(onClick = onNewThreadClick) {
                             Text("+ тред", style = MaterialTheme.typography.labelLarge)
                         }
@@ -68,6 +87,14 @@ fun BoardScreen(
                 .padding(paddingValues)
         ) {
             when {
+                locked -> {
+                    AdultLockedState(
+                        boardName = board.id,
+                        onUnlock = { askAdult = true },
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
@@ -92,6 +119,7 @@ fun BoardScreen(
                         items(uiState.threads, key = { it.num }) { thread ->
                             ThreadCard(
                                 thread = thread,
+                                adultBoard = adultBoard,
                                 onClick = { onThreadClick(thread) }
                             )
                         }
@@ -100,12 +128,29 @@ fun BoardScreen(
             }
         }
     }
+
+    if (askAdult && locked) {
+        AdultGateDialog(
+            title = "Доска «Взрослым»",
+            body = "Доска /${board.id}/ «${board.name}» содержит материалы для взрослых. " +
+                "Подтвердите, что вам исполнилось 18 лет, чтобы смотреть треды и писать в них.",
+            onConfirm = {
+                askAdult = false
+                onAdultConfirmed()
+            },
+            onDismiss = {
+                askAdult = false
+                onBack()
+            }
+        )
+    }
 }
 
 @Composable
 fun ThreadCard(
     thread: ThreadPreview,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    adultBoard: Boolean = false
 ) {
     val comment = thread.comment.htmlToPlainText()
 
@@ -132,7 +177,7 @@ fun ThreadCard(
                 ThreadBadges(thread)
             }
 
-            ThreadOpThumbs(thread = thread, onClick = onClick)
+            ThreadOpThumbs(thread = thread, adultBoard = adultBoard, onClick = onClick)
 
             if (comment.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -172,7 +217,7 @@ fun ThreadCard(
  * Превью медиаконтент ОП-поста треда: картинк и видео рисует превью
  */
 @Composable
-private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit) {
+private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit, adultBoard: Boolean = false) {
     val thumbs = thread.files.orEmpty().filter {
         val kind = it.kind()
         kind == FileKind.Image || kind == FileKind.Video
@@ -188,7 +233,8 @@ private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit) {
                 file = file,
                 onClick = onClick,
                 maxThumbWidth = 140f,
-                maxThumbHeight = 100f
+                maxThumbHeight = 100f,
+                adultBoard = adultBoard
             )
         }
     }
