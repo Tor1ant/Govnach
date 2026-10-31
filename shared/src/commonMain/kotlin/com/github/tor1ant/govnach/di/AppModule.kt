@@ -2,6 +2,7 @@ package com.github.tor1ant.govnach.di
 
 import com.github.tor1ant.govnach.client.Client
 import com.github.tor1ant.govnach.ui.media.MediaImageLoader
+import com.github.tor1ant.govnach.ui.media.MediaUrlResolver
 import com.github.tor1ant.govnach.ui.media.platformMediaOpener
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
 import io.ktor.client.HttpClient
@@ -48,6 +49,7 @@ val appModule = module {
     }
 
     single { MediaImageLoader(get()) }
+    single { MediaUrlResolver(get()) }
     single { platformMediaOpener() }
     single { Client(get()) }
     single { HomeViewModel(client = get()) }

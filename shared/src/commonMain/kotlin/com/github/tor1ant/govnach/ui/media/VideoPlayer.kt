@@ -21,6 +21,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,31 +44,52 @@ import io.github.kdroidfilter.composemediaplayer.CacheConfig
 import io.github.kdroidfilter.composemediaplayer.VideoPlayerError
 import io.github.kdroidfilter.composemediaplayer.VideoPlayerState
 import io.github.kdroidfilter.composemediaplayer.VideoPlayerSurface
-import io.github.kdroidfilter.composemediaplayer.rememberVideoPlayerState
+import io.github.kdroidfilter.composemediaplayer.createVideoPlayerState
 import kotlinx.coroutines.delay
 
 /**
  * Видеоплеер треда. Рендерится внутри Compose: на Android кадры идут через media3,
  * на desktop — через нативный бэкенд платформы (Media Foundation / AVPlayer / GStreamer).
  * Кэш включён, чтобы повторный просмотр того же файла не скачивался заново.
+ *
+ * [active] — окно видно на экране: пока false, поток не открывается, чтобы окно,
+ * уехавшее за край, не продолжало тянуть сеть и декодировать видео.
+ * [onVideoSize] сообщает натуральный размер видео, как только он известен,
+ * по нему окно просмотра подбирает свои пропорции.
  */
 @Composable
 fun VideoPlayer(
     url: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    active: Boolean = true,
+    onVideoSize: ((Int, Int) -> Unit)? = null
 ) {
-    val playerState = rememberVideoPlayerState(
-        cacheConfig = CacheConfig(
-            enabled = true,
-            maxCacheSizeBytes = 200L * 1024L * 1024L
-        )
-    )
+    // Освобождение берём на себя: библиотечный rememberVideoPlayerState освобождает плеер
+    // мгновенно, а если в этот момент ещё идёт открытие файла, нативный слой на Windows падает.
+    // Поэтому createVideoPlayerState + отсроченное освобождение через [VideoPlayerReaper].
+    val playerState = remember { createVideoPlayerState(cacheConfig = PlayerCache) }
+    DisposableEffect(playerState) {
+        onDispose { VideoPlayerReaper.reap(playerState) }
+    }
 
-    LaunchedEffect(url) {
-        playerState.openUri(url)
+    LaunchedEffect(url, active) {
+        if (active) {
+            playerState.openUri(url)
+        } else {
+            playerState.pause()
+        }
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
+
+    // Метаданные — платформенный тип: на Android он приходит nullable, на desktop — нет.
+    val videoWidth = playerState.metadata.width ?: 0
+    val videoHeight = playerState.metadata.height ?: 0
+    LaunchedEffect(videoWidth, videoHeight) {
+        if (videoWidth > 0 && videoHeight > 0) {
+            onVideoSize?.invoke(videoWidth, videoHeight)
+        }
+    }
 
     LaunchedEffect(controlsVisible, playerState.isPlaying) {
         if (controlsVisible && playerState.isPlaying) {
@@ -327,19 +349,8 @@ private fun errorMessage(error: VideoPlayerError): String = when (error) {
 
 private const val CONTROLS_HIDE_DELAY_MS = 3000L
 
-/** Opaque-обёртка над android Context, чтобы commonMain не знал про android. */
-class PlatformUiContext(val value: Any)
-
-/**
- * Открывает медиа вне приложения (audio/sticker/other на обеих платформах).
- * Context для intent прокидывается из composable вызывающей стороны.
- */
-interface PlatformMediaOpener {
-    fun open(context: PlatformUiContext, url: String): Boolean
-}
-
-/** Фабрика для DI: AppModule собирает opener платформы без platform-классов в commonMain. */
-expect fun platformMediaOpener(): PlatformMediaOpener
-
-/** Context, из которого android запускает intent; на desktop — пустышка. */
-expect val mediaPlatformContext: PlatformUiContext
+/** Кэш скачанных роликов: повторный просмотр того же файла не тянет его заново. */
+private val PlayerCache = CacheConfig(
+    enabled = true,
+    maxCacheSizeBytes = 200L * 1024L * 1024L
+)

@@ -9,7 +9,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
@@ -18,9 +20,9 @@ import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.ui.media.FileKind
 import com.github.tor1ant.govnach.ui.media.FileMetaLine
 import com.github.tor1ant.govnach.ui.media.FileThumb
-import com.github.tor1ant.govnach.ui.media.ImageViewer
-import com.github.tor1ant.govnach.ui.media.LocalPlayerDialog
 import com.github.tor1ant.govnach.ui.media.MediaPaths
+import com.github.tor1ant.govnach.ui.media.MediaViewer
+import com.github.tor1ant.govnach.ui.media.MediaViewerRequest
 import com.github.tor1ant.govnach.ui.media.PlatformMediaOpener
 import com.github.tor1ant.govnach.ui.media.formatSizeKb
 import com.github.tor1ant.govnach.ui.media.kind
@@ -37,6 +39,7 @@ import org.openapitools.client.models.Post
  * Тред: посты от ОП-поста до последнего плюс композер ответа.
  * Открыть его можно с экрана доски.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ThreadScreen(
     board: Board,
@@ -54,6 +57,18 @@ fun ThreadScreen(
 
     var comment by remember(boardId, threadNum) { mutableStateOf("") }
     val commentFocus = remember { FocusRequester() }
+
+    // Просмотр медиа живёт поверх треда в собственном окне (на desktop — окне ОС),
+    // а лента при этом остаётся на месте.
+    var viewingFile: FileModel? by remember { mutableStateOf(null) }
+    var playingFile: FileModel? by remember { mutableStateOf(null) }
+    val mediaOverlayOpen = viewingFile != null || playingFile != null
+
+    // На Android системный «назад» сначала закрывает просмотр медиа, а не выходит из треда.
+    BackHandler(enabled = mediaOverlayOpen) {
+        viewingFile = null
+        playingFile = null
+    }
 
     val threadClosed = uiState.posts.firstOrNull()?.closed?.let { it > 0 } ?: false
     val canReply = board.enablePosting && !threadClosed && !uiState.isLoading && uiState.posts.isNotEmpty()
@@ -106,67 +121,86 @@ fun ThreadScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                when {
-                    uiState.isLoading -> {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        when {
+                            uiState.isLoading -> {
+                                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                            }
 
-                    uiState.error != null -> {
-                        ErrorState(
-                            message = uiState.error ?: "Неизвестная ошибка",
-                            onRetry = { viewModel.loadPosts() }
-                        )
-                    }
-
-                    else -> {
-                        var viewingFile: FileModel? by remember { mutableStateOf(null) }
-                        var playingFile: FileModel? by remember { mutableStateOf(null) }
-
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(uiState.posts, key = { it.num }) { post ->
-                                PostCard(
-                                    post = post,
-                                    onImageClick = { viewingFile = it },
-                                    onVideoClick = { playingFile = it },
-                                    onExternalClick = { file -> mediaOpener.open(mediaContext, MediaPaths.src(file)) },
-                                    onReplyTo = if (canReply) {
-                                        {
-                                            comment = appendCrosspost(comment, post.num)
-                                            commentFocus.requestFocus()
-                                        }
-                                    } else {
-                                        null
-                                    }
+                            uiState.error != null -> {
+                                ErrorState(
+                                    message = uiState.error ?: "Неизвестная ошибка",
+                                    onRetry = { viewModel.loadPosts() }
                                 )
                             }
+
+                            else -> {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(uiState.posts, key = { it.num }) { post ->
+                                        PostCard(
+                                            post = post,
+                                            onImageClick = { viewingFile = it },
+                                            onVideoClick = { playingFile = it },
+                                            onExternalClick = { file ->
+                                                mediaOpener.openFile(
+                                                    context = mediaContext,
+                                                    file = file,
+                                                    url = MediaPaths.src(file),
+                                                    pageUrl = threadPageUrl(boardId, threadNum)
+                                                )
+                                            },
+                                            onReplyTo = if (canReply) {
+                                                {
+                                                    comment = appendCrosspost(comment, post.num)
+                                                    commentFocus.requestFocus()
+                                                }
+                                            } else {
+                                                null
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
-
-                        viewingFile?.let { file -> ImageViewer(file = file, onDismiss = { viewingFile = null }) }
-                        playingFile?.let { file -> LocalPlayerDialog(file = file, onDismiss = { playingFile = null }) }
                     }
-                }
-            }
 
-            PostingComposer(
-                board = board,
-                threadNum = threadNum,
-                comment = comment,
-                onCommentChange = { comment = it },
-                commentFocus = commentFocus,
-                enabled = canReply,
-                hint = composerHint,
-                isPosting = uiState.isPosting,
-                onSend = { draft -> viewModel.sendDraft(draft) }
-            )
+                    PostingComposer(
+                        board = board,
+                        threadNum = threadNum,
+                        comment = comment,
+                        onCommentChange = { comment = it },
+                        commentFocus = commentFocus,
+                        enabled = canReply,
+                        hint = composerHint,
+                        isPosting = uiState.isPosting,
+                        onSend = { draft -> viewModel.sendDraft(draft) }
+                    )
+                }
+
+                // Просмотр медиа: на desktop открывается отдельное окно ОС, на Android —
+                // панель поверх приложения. Контент в окне привязан к его краям.
+                val viewing = viewingFile
+                val playing = playingFile
+                val openMedia = viewing ?: playing
+                MediaViewer(
+                    request = openMedia?.let { MediaViewerRequest(it, pageUrl = threadPageUrl(boardId, threadNum)) },
+                    onDismiss = {
+                        viewingFile = null
+                        playingFile = null
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         uiState.captcha?.let { captcha ->
@@ -187,6 +221,10 @@ private fun appendCrosspost(comment: String, postNum: Int): String {
     val reference = ">>$postNum "
     return if (comment.contains(reference.removeSuffix(" "))) comment else comment + reference
 }
+
+/** Страница треда на дваче: на неё уходит «открыть в браузере» из окна просмотра. */
+private fun threadPageUrl(boardId: String, threadNum: Int): String =
+    "https://2ch.hk/$boardId/res/$threadNum.html"
 
 @Composable
 fun PostCard(
@@ -347,31 +385,20 @@ private fun PostMedia(
                     )
                 }
 
-                FileKind.Audio -> {
+                FileKind.Sticker -> {
+                    FileThumb(file = file, onClick = { onImageClick(file) })
+                    FileMetaLine(file = file, extra = "🃏 стикер")
+                }
+
+                FileKind.Audio, FileKind.Other -> {
                     TextButton(onClick = { onExternalClick(file) }) {
                         Text(
                             text = buildString {
-                                append("🎵 ")
+                                append(if (file.kind() == FileKind.Audio) "🎵 " else "📎 ")
                                 append(file.displayname.ifEmpty { file.name })
                                 append(" · ")
                                 append(formatSizeKb(file.propertySize))
                                 file.duration?.ifEmpty { null }?.let { append(" · $it") }
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                FileKind.Sticker, FileKind.Other -> {
-                    TextButton(onClick = { onExternalClick(file) }) {
-                        Text(
-                            text = buildString {
-                                append(if (file.kind() == FileKind.Sticker) "🃏 стикер" else "📎 ")
-                                append(file.displayname.ifEmpty { file.name })
-                                append(" · ")
-                                append(formatSizeKb(file.propertySize))
                             },
                             style = MaterialTheme.typography.labelMedium,
                             maxLines = 1,
