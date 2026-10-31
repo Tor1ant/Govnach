@@ -24,6 +24,9 @@ import org.openapitools.client.models.Board
  * Один блок работает и для ответа в тред ([threadNum]), и для нового треда (null).
  *
  * Поле файла — именно путь: компонента выбора файлов в Compose нет, а двачу нужен байтовый аплоад.
+ *
+ * [onClose] != null — композер можно свернуть: на экране треда он выезжает по требованию
+ * и не должен закрывать ленту, пока пользователь не пишет. На экране нового треда его нет.
  */
 @Composable
 fun PostingComposer(
@@ -36,6 +39,7 @@ fun PostingComposer(
     hint: String?,
     isPosting: Boolean,
     sendLabel: String = "→",
+    onClose: (() -> Unit)? = null,
     onSend: (PostingDraft) -> Unit
 ) {
     var name by remember(board.id, threadNum) { mutableStateOf("") }
@@ -75,21 +79,37 @@ fun PostingComposer(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val location = if (threadNum == null) "/${board.id}/ · новый тред" else "/${board.id}/$threadNum"
-            Text(
-                text = buildString {
-                    append(hint ?: "$location · ${comment.length}/${rules.maxComment}")
-                    attached?.let {
-                        append(" · 📎 ")
-                        append(it.name)
-                        append(" (")
-                        append(formatBytes(it.sizeBytes))
-                        append(")")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = buildString {
+                        append(hint ?: "$location · ${comment.length}/${rules.maxComment}")
+                        attached?.let {
+                            append(" · 📎 ")
+                            append(it.name)
+                            append(" (")
+                            append(formatBytes(it.sizeBytes))
+                            append(")")
+                        }
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hint == null && problems.isNotEmpty()) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Свернуть обратно к ленте. Не отменяет набранный текст: он ждёт следующего открытия.
+                onClose?.let { close ->
+                    TextButton(
+                        onClick = close,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("✕", style = MaterialTheme.typography.labelLarge)
                     }
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (hint == null && problems.isNotEmpty()) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                }
+            }
 
             if (enabled) {
                 if (rules.allowName) {
