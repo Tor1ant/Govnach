@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import com.github.tor1ant.govnach.ui.BoardScreen
 import com.github.tor1ant.govnach.ui.HomeScreen
 import com.github.tor1ant.govnach.ui.NewThreadScreen
+import com.github.tor1ant.govnach.ui.StartupScreen
 import com.github.tor1ant.govnach.ui.ThreadScreen
 import com.github.tor1ant.govnach.ui.model.AdultAccess
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
@@ -27,6 +28,11 @@ import org.koin.compose.koinInject
  *
  * Разрешение на взрослые доски хранит [HomeViewModel] (singleton): его хватает и главной,
  * и экрану доски — открытие доски с тредами и постингом от него же зависит.
+ *
+ * Пока главная загружает список досок впервые, открывается заставка с логотипом:
+ * пустой экран со спиннером при запуске заменяем на тот же знак, что и в иконке.
+ * Дальше заставка не показывается — повторные загрузки (кнопка «повторить») идут
+ * внутри главной.
  */
 @Composable
 fun App(
@@ -43,48 +49,56 @@ fun App(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            when (val route = navigator.currentRoute) {
-                AppRoute.Home -> HomeScreen(
-                    onBoardClick = { board -> navigator.openBoard(board) }
-                )
+            // Логотип на запуске, пока первый ответ списка досок ещё в пути. Ответ с ошибкой
+            // заставку уже снимает: дальше главная сама покажет состояние «повторить».
+            val startingUp = homeState.isLoading && homeState.boards.isEmpty() && homeState.error == null
 
-                is AppRoute.Board -> BoardScreen(
-                    board = route.board,
-                    adultAllowed = adultAllowed,
-                    onAdultConfirmed = { homeViewModel.allowAdult() },
-                    onThreadClick = { thread ->
-                        navigator.openThread(
-                            board = route.board,
-                            threadNum = thread.num,
-                            threadSubject = thread.subject.orEmpty()
-                        )
-                    },
-                    onNewThreadClick = { navigator.openNewThread(route.board) },
-                    onBack = { navigator.back() }
-                )
+            if (startingUp) {
+                StartupScreen()
+            } else {
+                when (val route = navigator.currentRoute) {
+                    AppRoute.Home -> HomeScreen(
+                        onBoardClick = { board -> navigator.openBoard(board) }
+                    )
 
-                is AppRoute.NewThread -> NewThreadScreen(
-                    board = route.board,
-                    adultAllowed = adultAllowed,
-                    onAdultConfirmed = { homeViewModel.allowAdult() },
-                    onCreated = { threadNum, subject ->
-                        navigator.replaceWithThread(
-                            board = route.board,
-                            threadNum = threadNum,
-                            threadSubject = subject.orEmpty()
-                        )
-                    },
-                    onBack = { navigator.back() }
-                )
+                    is AppRoute.Board -> BoardScreen(
+                        board = route.board,
+                        adultAllowed = adultAllowed,
+                        onAdultConfirmed = { homeViewModel.allowAdult() },
+                        onThreadClick = { thread ->
+                            navigator.openThread(
+                                board = route.board,
+                                threadNum = thread.num,
+                                threadSubject = thread.subject.orEmpty()
+                            )
+                        },
+                        onNewThreadClick = { navigator.openNewThread(route.board) },
+                        onBack = { navigator.back() }
+                    )
 
-                is AppRoute.Thread -> ThreadScreen(
-                    board = route.board,
-                    threadNum = route.threadNum,
-                    threadSubject = route.threadSubject,
-                    adultAllowed = adultAllowed,
-                    onAdultConfirmed = { homeViewModel.allowAdult() },
-                    onBack = { navigator.back() }
-                )
+                    is AppRoute.NewThread -> NewThreadScreen(
+                        board = route.board,
+                        adultAllowed = adultAllowed,
+                        onAdultConfirmed = { homeViewModel.allowAdult() },
+                        onCreated = { threadNum, subject ->
+                            navigator.replaceWithThread(
+                                board = route.board,
+                                threadNum = threadNum,
+                                threadSubject = subject.orEmpty()
+                            )
+                        },
+                        onBack = { navigator.back() }
+                    )
+
+                    is AppRoute.Thread -> ThreadScreen(
+                        board = route.board,
+                        threadNum = route.threadNum,
+                        threadSubject = route.threadSubject,
+                        adultAllowed = adultAllowed,
+                        onAdultConfirmed = { homeViewModel.allowAdult() },
+                        onBack = { navigator.back() }
+                    )
+                }
             }
         }
     }
