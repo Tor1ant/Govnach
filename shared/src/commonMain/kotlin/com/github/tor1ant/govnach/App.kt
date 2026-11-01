@@ -17,12 +17,12 @@ import com.github.tor1ant.govnach.ui.model.HomeViewModel
 import com.github.tor1ant.govnach.ui.navigation.AppNavigator
 import com.github.tor1ant.govnach.ui.navigation.AppRoute
 import com.github.tor1ant.govnach.ui.navigation.rememberAppNavigator
+import com.github.tor1ant.govnach.ui.search.SearchScreen
+import com.github.tor1ant.govnach.ui.search.SearchViewModel
 import com.github.tor1ant.govnach.ui.theme.GovnachTheme
 import com.github.tor1ant.govnach.ui.theme.ThemeState
 import com.github.tor1ant.govnach.ui.theme.rememberThemeState
-import org.koin.compose.koinInject
-
-/**
+import org.koin.compose.koinInject/**
  * Корень приложения: тема (светлая/тёмная) и текущий экран. Переключатель темы живёт
  * в шапке каждого экрана и берёт состояние из [GovnachTheme] через LocalThemeState.
  *
@@ -43,6 +43,10 @@ fun App(
     val homeState by homeViewModel.uiState.collectAsState()
     val adultAllowed = homeState.adultAccess == AdultAccess.ALLOWED
 
+    // Вьюмодель поиска — singleton: её кэш тредов и строку запроса не жалко терять
+    // при каждом входе в поиск и выходе из него.
+    val searchViewModel: SearchViewModel = koinInject()
+
     GovnachTheme(themeState) {
         // Тёмный фон — сразу под корнем: пока экран грузится, окно не мигает белым.
         Surface(
@@ -58,7 +62,22 @@ fun App(
             } else {
                 when (val route = navigator.currentRoute) {
                     AppRoute.Home -> HomeScreen(
-                        onBoardClick = { board -> navigator.openBoard(board) }
+                        onBoardClick = { board -> navigator.openBoard(board) },
+                        onSearchClick = { navigator.openSearch() }
+                    )
+
+                    AppRoute.Search -> SearchScreen(
+                        viewModel = searchViewModel,
+                        adultAllowed = adultAllowed,
+                        onBack = { navigator.back() },
+                        onBoardClick = { board -> navigator.openBoard(board) },
+                        onThreadClick = { board, threadNum, subject ->
+                            navigator.openThread(
+                                board = board,
+                                threadNum = threadNum,
+                                threadSubject = subject
+                            )
+                        }
                     )
 
                     is AppRoute.Board -> BoardScreen(
@@ -73,6 +92,7 @@ fun App(
                             )
                         },
                         onNewThreadClick = { navigator.openNewThread(route.board) },
+                        onSearchClick = { navigator.openSearch() },
                         onBack = { navigator.back() }
                     )
 

@@ -16,6 +16,7 @@ import com.github.tor1ant.govnach.client.needsAdultConfirmation
 import com.github.tor1ant.govnach.ui.model.BoardViewModel
 import com.github.tor1ant.govnach.ui.media.FileKind
 import com.github.tor1ant.govnach.ui.media.FileThumb
+import com.github.tor1ant.govnach.ui.search.SearchActionButton
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
@@ -24,7 +25,8 @@ import com.github.tor1ant.govnach.ui.media.kind
 
 /**
  * Доска: список тредов. Клик по треду открывает сам тред,
- * кнопка в шапке — создание нового треда (когда доска разрешает постинг).
+ * кнопка в шапке — создание нового треда (когда доска разрешает постинг),
+ * лупа — поиск по всем доскам и тредам.
  *
  * [adultAllowed] — подтвердил ли пользователь возраст. Пока для взрослой доски это false,
  * треды не грузятся, клики по ним и кнопка нового треда не работают: вместо контента —
@@ -37,7 +39,8 @@ fun BoardScreen(
     onNewThreadClick: (() -> Unit)? = null,
     onBack: () -> Unit,
     adultAllowed: Boolean = true,
-    onAdultConfirmed: () -> Unit = {}
+    onAdultConfirmed: () -> Unit = {},
+    onSearchClick: () -> Unit = {}
 ) {
     val client: Client = koinInject()
     val adultBoard = board.isAdult()
@@ -72,6 +75,8 @@ fun BoardScreen(
                 },
                 navigationIcon = { BackButton(onClick = onBack) },
                 actions = {
+                    SearchActionButton(onClick = onSearchClick)
+
                     if (onNewThreadClick != null && board.enablePosting && !locked) {
                         TextButton(onClick = onNewThreadClick) {
                             Text("+ тред", style = MaterialTheme.typography.labelLarge)

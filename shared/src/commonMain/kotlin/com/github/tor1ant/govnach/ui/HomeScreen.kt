@@ -14,13 +14,14 @@ import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.isAdult
 import com.github.tor1ant.govnach.ui.model.AdultAccess
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
+import com.github.tor1ant.govnach.ui.search.SearchActionButton
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
 
 @Composable
 fun HomeScreen(
-    onBoardClick: (Board) -> Unit = {}
-
+    onBoardClick: (Board) -> Unit = {},
+    onSearchClick: () -> Unit = {}
 ) {
     val viewModel: HomeViewModel = koinInject()
     val uiState by viewModel.uiState.collectAsState()
@@ -29,7 +30,10 @@ fun HomeScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            AppTopBar(title = { HomeTopBarTitle() })
+            AppTopBar(
+                title = { HomeTopBarTitle() },
+                actions = { SearchActionButton(onClick = onSearchClick) }
+            )
         }
     ) { paddingValues ->
         Box(
