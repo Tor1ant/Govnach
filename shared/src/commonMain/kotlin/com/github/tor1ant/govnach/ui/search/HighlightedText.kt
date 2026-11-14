@@ -110,3 +110,34 @@ fun matchRanges(haystack: String, terms: List<String>): List<MatchRange> {
 
     return merged
 }
+
+/**
+ * Фрагмент текста вокруг первого совпадения: показывать весь ОП-пост в карточке треда незачем.
+ * Окно в [radius] символов с многоточием на обрезанном краю.
+ *
+ * Если в тексте нет ни одного слова запроса, режется начало — карточка всё равно
+ * должна показать хоть что-то осмысленное, а не пустую строку.
+ */
+fun snippetAround(text: String, terms: List<String>, radius: Int = SNIPPET_RADIUS): String {
+    val flat = text.replace(Regex("\\s+"), " ").trim()
+    if (flat.isEmpty()) return ""
+
+    val haystack = normalizeForSearch(flat)
+    val first = terms
+        .map { haystack.indexOf(it) }
+        .filter { it >= 0 }
+        .minOrNull()
+
+    if (first == null) {
+        return flat.take(radius * 2).let { if (flat.length <= it.length) it else "$it…" }
+    }
+
+    val start = (first - radius).coerceAtLeast(0)
+    val end = (first + radius).coerceAtMost(flat.length)
+
+    val head = if (start > 0) "…" else ""
+    val tail = if (end < flat.length) "…" else ""
+    return head + flat.substring(start, end).trim() + tail
+}
+
+internal const val SNIPPET_RADIUS = 90

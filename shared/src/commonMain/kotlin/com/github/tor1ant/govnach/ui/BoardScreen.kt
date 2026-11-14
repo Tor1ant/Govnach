@@ -12,11 +12,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.Client
 import com.github.tor1ant.govnach.client.isAdult
-import com.github.tor1ant.govnach.client.needsAdultConfirmation
 import com.github.tor1ant.govnach.ui.model.BoardViewModel
 import com.github.tor1ant.govnach.ui.media.FileKind
 import com.github.tor1ant.govnach.ui.media.FileThumb
+import com.github.tor1ant.govnach.ui.search.AppSearchBar
+import com.github.tor1ant.govnach.ui.search.HighlightedText
 import com.github.tor1ant.govnach.ui.search.SearchActionButton
+import com.github.tor1ant.govnach.ui.search.searchTerms
+import com.github.tor1ant.govnach.ui.search.searchThreads
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
@@ -25,65 +28,87 @@ import com.github.tor1ant.govnach.ui.media.kind
 
 /**
  * Доска: список тредов. Клик по треду открывает сам тред,
- * кнопка в шапке — создание нового треда (когда доска разрешает постинг),
- * лупа — поиск по всем доскам и тредам.
+ * кнопка в шапке — создание нового треда (когда доска разрешает постинг).
  *
- * [adultAllowed] — подтвердил ли пользователь возраст. Пока для взрослой доски это false,
- * треды не грузятся, клики по ним и кнопка нового треда не работают: вместо контента —
- * [AdultLockedState] с подтверждением.
+ * Лупа в шапке ищет **треды этой доски**: на главной ищут доски, а внутри доски —
+ * её содержимое. Поиск идёт по теме и тексту ОП-поста, подходящее подсвечивается
+ * прямо в карточке треда.
+ *
+ * Доски категории «Взрослым» ничем не отличаются: треды грузятся сразу, постинг доступен
+ * по общему правилу доски.
  */
 @Composable
 fun BoardScreen(
     board: Board,
     onThreadClick: (ThreadPreview) -> Unit,
     onNewThreadClick: (() -> Unit)? = null,
-    onBack: () -> Unit,
-    adultAllowed: Boolean = true,
-    onAdultConfirmed: () -> Unit = {},
-    onSearchClick: () -> Unit = {}
+    onBack: () -> Unit
 ) {
     val client: Client = koinInject()
     val adultBoard = board.isAdult()
-    val locked = needsAdultConfirmation(board, adultAllowed)
     val viewModel = remember(board.id) { BoardViewModel(client, board) }
     val uiState by viewModel.uiState.collectAsState()
-    var askAdult by remember(board.id) { mutableStateOf(false) }
 
-    // Открыли взрослую доску без подтверждения — сразу спрашиваем возраст, а не показываем треды.
-    LaunchedEffect(board.id) {
-        if (locked) askAdult = true
+    // Поиск по тредам доски: лупа в шапке раскрывается в строку ввода.
+    var searching by remember(board.id) { mutableStateOf(false) }
+    var query by remember(board.id) { mutableStateOf("") }
+
+    val terms = searchTerms(query)
+    // Треды уже загружены вьюмоделью: фильтр идёт по памяти и в сеть не ходит.
+    val threads = if (terms.isEmpty()) {
+        uiState.threads
+    } else {
+        searchThreads(mapOf(board to uiState.threads), terms).map { it.thread }
+    }
+
+    fun closeSearch() {
+        searching = false
+        query = ""
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            AppTopBar(
-                title = {
-                    Column {
-                        Text(
-                            text = if (adultBoard) "🔞 /${board.id}/" else "/${board.id}/",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = board.name,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                },
-                navigationIcon = { BackButton(onClick = onBack) },
-                actions = {
-                    SearchActionButton(onClick = onSearchClick)
+            if (searching) {
+                AppSearchBar(
+                    query = query,
+                    onQueryChange = { query = it },
+                    hint = "Поиск тредов на /${board.id}/",
+                    isSearching = false,
+                    onSubmit = {},
+                    onClear = { query = "" },
+                    autoFocus = true,
+                    onClose = ::closeSearch
+                )
+            } else {
+                AppTopBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = if (adultBoard) "🔞 /${board.id}/" else "/${board.id}/",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = board.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    navigationIcon = { BackButton(onClick = onBack) },
+                    actions = {
+                        SearchActionButton(onClick = { searching = true })
 
-                    if (onNewThreadClick != null && board.enablePosting && !locked) {
-                        TextButton(onClick = onNewThreadClick) {
-                            Text("+ тред", style = MaterialTheme.typography.labelLarge)
+                        if (onNewThreadClick != null && board.enablePosting) {
+                            TextButton(onClick = onNewThreadClick) {
+                                Text("+ тред", style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -92,14 +117,6 @@ fun BoardScreen(
                 .padding(paddingValues)
         ) {
             when {
-                locked -> {
-                    AdultLockedState(
-                        boardName = board.id,
-                        onUnlock = { askAdult = true },
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
@@ -111,8 +128,14 @@ fun BoardScreen(
                     )
                 }
 
-                uiState.threads.isEmpty() -> {
-                    EmptyState(text = "На доске пока нет тредов")
+                threads.isEmpty() -> {
+                    EmptyState(
+                        text = if (terms.isNotEmpty() && uiState.threads.isNotEmpty()) {
+                            "На /${board.id}/ ничего не найдено по запросу «$query»"
+                        } else {
+                            "На доске пока нет тредов"
+                        }
+                    )
                 }
 
                 else -> {
@@ -121,11 +144,14 @@ fun BoardScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(uiState.threads, key = { it.num }) { thread ->
+                        items(threads, key = { it.num }) { thread ->
                             ThreadCard(
                                 thread = thread,
-                                adultBoard = adultBoard,
-                                onClick = { onThreadClick(thread) }
+                                terms = terms,
+                                onClick = {
+                                    closeSearch()
+                                    onThreadClick(thread)
+                                }
                             )
                         }
                     }
@@ -133,29 +159,17 @@ fun BoardScreen(
             }
         }
     }
-
-    if (askAdult && locked) {
-        AdultGateDialog(
-            title = "Доска «Взрослым»",
-            body = "Доска /${board.id}/ «${board.name}» содержит материалы для взрослых. " +
-                "Подтвердите, что вам исполнилось 18 лет, чтобы смотреть треды и писать в них.",
-            onConfirm = {
-                askAdult = false
-                onAdultConfirmed()
-            },
-            onDismiss = {
-                askAdult = false
-                onBack()
-            }
-        )
-    }
 }
 
+/**
+ * Карточка треда. [terms] — слова запроса из строки поиска доски: совпадения
+ * подсвечиваются в теме и в тексте ОП-поста, чтобы было видно, почему тред в выдаче.
+ */
 @Composable
 fun ThreadCard(
     thread: ThreadPreview,
     onClick: () -> Unit,
-    adultBoard: Boolean = false
+    terms: List<String> = emptyList()
 ) {
     val comment = thread.comment.htmlToPlainText()
 
@@ -169,27 +183,40 @@ fun ThreadCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    text = thread.subject?.ifEmpty { null } ?: comment.ifEmpty { "Тред ${thread.num}" },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                val title = thread.subject?.ifEmpty { null } ?: comment.ifEmpty { "Тред ${thread.num}" }
+
+                if (terms.isEmpty()) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    HighlightedText(
+                        text = title,
+                        terms = terms,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 ThreadBadges(thread)
             }
 
-            ThreadOpThumbs(thread = thread, adultBoard = adultBoard, onClick = onClick)
+            ThreadOpThumbs(thread = thread, onClick = onClick)
 
             if (comment.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
+                HighlightedText(
                     text = comment.snippet(160),
+                    terms = terms,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -219,10 +246,10 @@ fun ThreadCard(
 }
 
 /**
- * Превью медиаконтент ОП-поста треда: картинк и видео рисует превью
+ * Превью медиаконтента ОП-поста треда: картинки и видео рисует превью.
  */
 @Composable
-private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit, adultBoard: Boolean = false) {
+private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit) {
     val thumbs = thread.files.orEmpty().filter {
         val kind = it.kind()
         kind == FileKind.Image || kind == FileKind.Video
@@ -238,8 +265,7 @@ private fun ThreadOpThumbs(thread: ThreadPreview, onClick: () -> Unit, adultBoar
                 file = file,
                 onClick = onClick,
                 maxThumbWidth = 140f,
-                maxThumbHeight = 100f,
-                adultBoard = adultBoard
+                maxThumbHeight = 100f
             )
         }
     }

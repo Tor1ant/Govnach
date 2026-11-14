@@ -12,6 +12,9 @@ import org.openapitools.client.models.ThreadPreview
  *
  * Проверяем то, что пользователь видит в выдаче: находит ли по части слова, не находить
  * ли лишнего, что стоит выше и какие интервалы подсвечиваются.
+ *
+ * Поиск контекстный: на главной ищут доски ([searchBoards]), внутри доски — её треды
+ * ([searchThreads] по списку). Доски категории «Взрослым» участвуют наравне с остальными.
  */
 class SearchLogicTest {
 
@@ -93,7 +96,7 @@ class SearchLogicTest {
     fun boardFoundByPrefixOfItsName() {
         val boards = listOf(board("b", "Разное"), board("tv", "Телевидение"), board("vg", "Видеоигры"))
 
-        val hits = searchBoards(boards, searchTerms("теле"), adultAllowed = false)
+        val hits = searchBoards(boards, searchTerms("теле"))
 
         assertEquals(listOf("tv"), hits.map { it.board.id }, "поиск идёт уже на первых символах")
     }
@@ -102,20 +105,29 @@ class SearchLogicTest {
     fun boardFoundByItsId() {
         val boards = listOf(board("b", "Разное"), board("mu", "Музыка"))
 
-        assertEquals(listOf("mu"), searchBoards(boards, searchTerms("mu"), adultAllowed = false).map { it.board.id })
+        assertEquals(listOf("mu"), searchBoards(boards, searchTerms("mu")).map { it.board.id })
     }
 
     @Test
-    fun adultBoardsHiddenUntilAgeConfirmed() {
-        val boards = listOf(board("b", "Разное"), board("sex", "Взрослым", "Взрослым"))
+    fun boardFoundByItsCategory() {
+        val boards = listOf(board("b", "Разное"), board("mu", "Музыка", "Творчество"))
 
-        assertTrue(
-            searchBoards(boards, searchTerms("взр"), adultAllowed = false).isEmpty(),
-            "до подтверждения возраста взрослые доски не попадают в поиск"
+        assertEquals(listOf("mu"), searchBoards(boards, searchTerms("творч")).map { it.board.id })
+    }
+
+    @Test
+    fun adultBoardsAreSearchedLikeAnyOther() {
+        // Гейта 18+ больше нет: категория «Взрослым» — такая же строка в поиске, как остальные.
+        val boards = listOf(board("b", "Разное"), board("sex", "Секс", "Взрослым"))
+
+        assertEquals(
+            listOf("sex"),
+            searchBoards(boards, searchTerms("взрослым")).map { it.board.id },
+            "доска категории «Взрослым» находится по категории без подтверждений"
         )
         assertEquals(
             listOf("sex"),
-            searchBoards(boards, searchTerms("взр"), adultAllowed = true).map { it.board.id }
+            searchBoards(boards, searchTerms("sex")).map { it.board.id }
         )
     }
 
@@ -123,89 +135,75 @@ class SearchLogicTest {
     fun emptyQueryReturnsNothing() {
         val boards = listOf(board("b", "Разное"))
 
-        assertTrue(searchBoards(boards, searchTerms("   "), adultAllowed = true).isEmpty())
+        assertTrue(searchBoards(boards, searchTerms("   ")).isEmpty())
     }
 
     // --- треды ------------------------------------------------------------------------
 
     @Test
     fun threadFoundBySubject() {
-        val byBoard = mapOf(
-            board("b") to listOf(
-                thread(1, subject = "Кошки", comment = "<p>просто тред</p>"),
-                thread(2, subject = "Собаки", comment = "<p>просто тред</p>")
-            )
+        val threads = listOf(
+            thread(1, subject = "Кошки", comment = "<p>просто тред</p>"),
+            thread(2, subject = "Собаки", comment = "<p>просто тред</p>")
         )
 
-        val hits = searchThreads(byBoard, searchTerms("кош"))
+        val hits = searchThreads(threads, searchTerms("кош"))
 
         assertEquals(listOf(1), hits.map { it.thread.num })
     }
 
     @Test
     fun threadFoundByCommentEvenWhenSubjectLacksIt() {
-        val byBoard = mapOf(
-            board("b") to listOf(thread(7, subject = "Вечерний", comment = "<p>Сегодня про <b>рыбалку</b></p>"))
-        )
+        val threads = listOf(thread(7, subject = "Вечерний", comment = "<p>Сегодня про <b>рыбалку</b></p>"))
 
-        val hits = searchThreads(byBoard, searchTerms("рыбалк"))
+        val hits = searchThreads(threads, searchTerms("рыбалк"))
 
         assertEquals(listOf(7), hits.map { it.thread.num })
     }
 
     @Test
     fun htmlMarkupDoesNotHideWords() {
-        val byBoard = mapOf(
-            board("b") to listOf(
-                thread(3, subject = null, comment = "<p>Ссылка на <a href=\"/res/1.html\">архив</a></p>")
-            )
+        val threads = listOf(
+            thread(3, subject = null, comment = "<p>Ссылка на <a href=\"/res/1.html\">архив</a></p>")
         )
 
-        assertEquals(listOf(3), searchThreads(byBoard, searchTerms("архив")).map { it.thread.num })
+        assertEquals(listOf(3), searchThreads(threads, searchTerms("архив")).map { it.thread.num })
     }
 
     @Test
     fun allWordsMustBePresent() {
-        val byBoard = mapOf(
-            board("b") to listOf(
-                thread(1, subject = "Кот", comment = "<p>просто пост</p>"),
-                thread(2, subject = "Кот и рыба", comment = "<p>просто пост</p>")
-            )
+        val threads = listOf(
+            thread(1, subject = "Кот", comment = "<p>просто пост</p>"),
+            thread(2, subject = "Кот и рыба", comment = "<p>просто пост</p>")
         )
 
-        val hits = searchThreads(byBoard, searchTerms("кот рыба"))
+        val hits = searchThreads(threads, searchTerms("кот рыба"))
 
         assertEquals(listOf(2), hits.map { it.thread.num }, "ищутся оба слова, а не любое")
     }
 
     @Test
     fun wordsMayBeSplitBetweenSubjectAndComment() {
-        val byBoard = mapOf(
-            board("b") to listOf(thread(5, subject = "Кот", comment = "<p>и рыба</p>"))
-        )
+        val threads = listOf(thread(5, subject = "Кот", comment = "<p>и рыба</p>"))
 
-        assertEquals(listOf(5), searchThreads(byBoard, searchTerms("кот рыба")).map { it.thread.num })
+        assertEquals(listOf(5), searchThreads(threads, searchTerms("кот рыба")).map { it.thread.num })
     }
 
     @Test
     fun threadMatchesAreCaseAndYoInsensitive() {
-        val byBoard = mapOf(
-            board("b") to listOf(thread(9, subject = "Ёжики", comment = "<p>колючие</p>"))
-        )
+        val threads = listOf(thread(9, subject = "Ёжики", comment = "<p>колючие</p>"))
 
-        assertEquals(listOf(9), searchThreads(byBoard, searchTerms("ежик")).map { it.thread.num })
+        assertEquals(listOf(9), searchThreads(threads, searchTerms("ежик")).map { it.thread.num })
     }
 
     @Test
     fun threadInSubjectOutranksThreadInComment() {
-        val byBoard = mapOf(
-            board("b") to listOf(
-                thread(100, subject = null, comment = "<p>в конце поста упомянут кот</p>"),
-                thread(1, subject = "Кототред", comment = "<p>картинки</p>")
-            )
+        val threads = listOf(
+            thread(100, subject = null, comment = "<p>в конце поста упомянут кот</p>"),
+            thread(1, subject = "Кототред", comment = "<p>картинки</p>")
         )
 
-        val hits = searchThreads(byBoard, searchTerms("кот"))
+        val hits = searchThreads(threads, searchTerms("кот"))
 
         assertEquals(
             listOf(1, 100),
@@ -216,31 +214,27 @@ class SearchLogicTest {
 
     @Test
     fun freshThreadFirstWhenBothMatchInSubject() {
-        val byBoard = mapOf(
-            board("b") to listOf(
-                thread(10, subject = "Кототред", comment = "<p>a</p>"),
-                thread(50, subject = "Кот", comment = "<p>b</p>")
-            )
+        val threads = listOf(
+            thread(10, subject = "Кототред", comment = "<p>a</p>"),
+            thread(50, subject = "Кот", comment = "<p>b</p>")
         )
 
         assertEquals(
             listOf(50, 10),
-            searchThreads(byBoard, searchTerms("кот")).map { it.thread.num },
+            searchThreads(threads, searchTerms("кот")).map { it.thread.num },
             "при равной релевантности свежий тред выше"
         )
     }
 
     @Test
     fun wordStartMatchRanksAboveMatchInsideWord() {
-        val byBoard = mapOf(
-            board("b") to listOf(
-                // «закотово» — «кот» внутри слова, в теме.
-                thread(1, subject = "Всё закотово", comment = "<p>a</p>"),
-                thread(2, subject = "Кот", comment = "<p>b</p>")
-            )
+        val threads = listOf(
+            // «закотово» — «кот» внутри слова, в теме.
+            thread(1, subject = "Всё закотово", comment = "<p>a</p>"),
+            thread(2, subject = "Кот", comment = "<p>b</p>")
         )
 
-        val hits = searchThreads(byBoard, searchTerms("кот"))
+        val hits = searchThreads(threads, searchTerms("кот"))
 
         assertEquals(
             listOf(2, 1),
@@ -250,14 +244,19 @@ class SearchLogicTest {
     }
 
     @Test
-    fun adultBoardThreadsAreSearchedOnlyWhenPassedIn() {
-        // Взрослые доски в searchThreads попадают только если вызывающая сторона их передала:
-        // гейт — на стороне вьюмодели, она не читает их вовсе.
-        val adult = board("sex", "Взрослым", "Взрослым")
-        val byBoard = mapOf(adult to listOf(thread(4, subject = "Коты", comment = "<p>x</p>", boardId = "sex")))
+    fun threadHitCarriesBoardIdFromTheThreadItself() {
+        // Поиск внутри доски не передаёт доску явно: ударение на том, что id доски
+        // для перехода восстанавливается из самого треда (поле board).
+        val threads = listOf(thread(4, subject = "Коты", comment = "<p>x</p>", boardId = "sex"))
 
-        assertTrue(searchThreads(emptyMap(), searchTerms("кот")).isEmpty())
-        assertEquals(1, searchThreads(byBoard, searchTerms("кот")).size)
+        val hits = searchThreads(threads, searchTerms("кот"))
+
+        assertEquals("sex", hits.single().board.id, "тред на доске «Взрослым» ищется как любой другой")
+    }
+
+    @Test
+    fun emptyThreadListReturnsNothing() {
+        assertTrue(searchThreads(emptyList(), searchTerms("кот")).isEmpty())
     }
 
     // --- подсветка ---------------------------------------------------------------------
@@ -284,24 +283,6 @@ class SearchLogicTest {
     fun unmatchedTextHasNoRanges() {
         assertTrue(matchRanges("кошки", searchTerms("собака")).isEmpty())
         assertTrue(matchRanges("кошки", emptyList()).isEmpty())
-    }
-
-    // --- фрагмент вокруг совпадения ----------------------------------------------------
-
-    @Test
-    fun snippetIsCutAroundMatchWithEllipsis() {
-        val text = "а".repeat(200) + " кот " + "б".repeat(200)
-
-        val snippet = snippetAround(text, searchTerms("кот"), radius = 10)
-
-        assertTrue(snippet.contains("кот"), "фрагмент должен содержать совпадение")
-        assertTrue(snippet.startsWith("…"), "обрезано слева — многоточие")
-        assertTrue(snippet.endsWith("…"), "обрезано справа — многоточие")
-    }
-
-    @Test
-    fun shortTextIsNotCut() {
-        assertEquals("тренд про кота", snippetAround("тренд про кота", searchTerms("кот")))
     }
 
     // --- адаптер фазы поиска -----------------------------------------------------------

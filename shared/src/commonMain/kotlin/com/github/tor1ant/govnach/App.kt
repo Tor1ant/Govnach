@@ -12,22 +12,22 @@ import com.github.tor1ant.govnach.ui.HomeScreen
 import com.github.tor1ant.govnach.ui.NewThreadScreen
 import com.github.tor1ant.govnach.ui.StartupScreen
 import com.github.tor1ant.govnach.ui.ThreadScreen
-import com.github.tor1ant.govnach.ui.model.AdultAccess
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
 import com.github.tor1ant.govnach.ui.navigation.AppNavigator
 import com.github.tor1ant.govnach.ui.navigation.AppRoute
 import com.github.tor1ant.govnach.ui.navigation.rememberAppNavigator
-import com.github.tor1ant.govnach.ui.search.SearchScreen
-import com.github.tor1ant.govnach.ui.search.SearchViewModel
 import com.github.tor1ant.govnach.ui.theme.GovnachTheme
 import com.github.tor1ant.govnach.ui.theme.ThemeState
 import com.github.tor1ant.govnach.ui.theme.rememberThemeState
-import org.koin.compose.koinInject/**
+import org.koin.compose.koinInject
+
+/**
  * Корень приложения: тема (светлая/тёмная) и текущий экран. Переключатель темы живёт
  * в шапке каждого экрана и берёт состояние из [GovnachTheme] через LocalThemeState.
  *
- * Разрешение на взрослые доски хранит [HomeViewModel] (singleton): его хватает и главной,
- * и экрану доски — открытие доски с тредами и постингом от него же зависит.
+ * Поиск не отдельный экран: лупа в шапке раскрывает строку ввода прямо на месте.
+ * На главной она ищет доски, на экране доски — треды этой доски, поэтому поиск
+ * не меняет место в навигации.
  *
  * Пока главная загружает список досок впервые, открывается заставка с логотипом:
  * пустой экран со спиннером при запуске заменяем на тот же знак, что и в иконке.
@@ -41,11 +41,6 @@ fun App(
 ) {
     val homeViewModel: HomeViewModel = koinInject()
     val homeState by homeViewModel.uiState.collectAsState()
-    val adultAllowed = homeState.adultAccess == AdultAccess.ALLOWED
-
-    // Вьюмодель поиска — singleton: её кэш тредов и строку запроса не жалко терять
-    // при каждом входе в поиск и выходе из него.
-    val searchViewModel: SearchViewModel = koinInject()
 
     GovnachTheme(themeState) {
         // Тёмный фон — сразу под корнем: пока экран грузится, окно не мигает белым.
@@ -62,28 +57,11 @@ fun App(
             } else {
                 when (val route = navigator.currentRoute) {
                     AppRoute.Home -> HomeScreen(
-                        onBoardClick = { board -> navigator.openBoard(board) },
-                        onSearchClick = { navigator.openSearch() }
-                    )
-
-                    AppRoute.Search -> SearchScreen(
-                        viewModel = searchViewModel,
-                        adultAllowed = adultAllowed,
-                        onBack = { navigator.back() },
-                        onBoardClick = { board -> navigator.openBoard(board) },
-                        onThreadClick = { board, threadNum, subject ->
-                            navigator.openThread(
-                                board = board,
-                                threadNum = threadNum,
-                                threadSubject = subject
-                            )
-                        }
+                        onBoardClick = { board -> navigator.openBoard(board) }
                     )
 
                     is AppRoute.Board -> BoardScreen(
                         board = route.board,
-                        adultAllowed = adultAllowed,
-                        onAdultConfirmed = { homeViewModel.allowAdult() },
                         onThreadClick = { thread ->
                             navigator.openThread(
                                 board = route.board,
@@ -92,14 +70,11 @@ fun App(
                             )
                         },
                         onNewThreadClick = { navigator.openNewThread(route.board) },
-                        onSearchClick = { navigator.openSearch() },
                         onBack = { navigator.back() }
                     )
 
                     is AppRoute.NewThread -> NewThreadScreen(
                         board = route.board,
-                        adultAllowed = adultAllowed,
-                        onAdultConfirmed = { homeViewModel.allowAdult() },
                         onCreated = { threadNum, subject ->
                             navigator.replaceWithThread(
                                 board = route.board,
@@ -114,8 +89,6 @@ fun App(
                         board = route.board,
                         threadNum = route.threadNum,
                         threadSubject = route.threadSubject,
-                        adultAllowed = adultAllowed,
-                        onAdultConfirmed = { homeViewModel.allowAdult() },
                         onBack = { navigator.back() }
                     )
                 }

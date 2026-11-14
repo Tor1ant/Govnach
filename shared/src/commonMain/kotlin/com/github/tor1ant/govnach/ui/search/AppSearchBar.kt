@@ -38,17 +38,21 @@ import androidx.compose.ui.unit.dp
  *
  * Enter отправляет запрос сразу ([onSubmit]), крестик очищает ([onClear]),
  * [isSearching] крутит спиннер справа: это про данные, а не про ввод.
+ *
+ * [onClose] включает режим «строка поиска в шапке»: слева появляется стрелка назад,
+ * которая сворачивает поиск и возвращает обычную шапку экрана.
  */
 @Composable
 fun AppSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    hint: String = "Поиск тредов и досок",
+    hint: String = "Поиск",
     isSearching: Boolean = false,
     onSubmit: () -> Unit = {},
     onClear: () -> Unit = {},
-    autoFocus: Boolean = false
+    autoFocus: Boolean = false,
+    onClose: (() -> Unit)? = null
 ) {
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
@@ -80,7 +84,15 @@ fun AppSearchBar(
             focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
-        leadingIcon = { SearchGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        leadingIcon = {
+            if (onClose != null) {
+                IconButton(onClick = onClose) {
+                    BackGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                SearchGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
         trailingIcon = {
             when {
                 isSearching -> Box(
@@ -136,8 +148,37 @@ internal fun SearchGlyph(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** Крестик очистки строки поиска. */
+/** Стрелка «назад»: сворачивает поиск и возвращает обычную шапку экрана. */
 @Composable
+internal fun BackGlyph(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(16.dp)) {
+        val stroke = size.minDimension * 0.14f
+
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.18f, size.height * 0.5f),
+            end = Offset(size.width * 0.84f, size.height * 0.5f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.18f, size.height * 0.5f),
+            end = Offset(size.width * 0.46f, size.height * 0.22f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.18f, size.height * 0.5f),
+            end = Offset(size.width * 0.46f, size.height * 0.78f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+/** Крестик очистки строки поиска. */@Composable
 internal fun ClearGlyph(color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(16.dp)) {
         val stroke = size.minDimension * 0.14f

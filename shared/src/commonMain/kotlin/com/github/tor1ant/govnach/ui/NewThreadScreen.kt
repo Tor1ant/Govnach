@@ -9,7 +9,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.Client
-import com.github.tor1ant.govnach.client.needsAdultConfirmation
 import com.github.tor1ant.govnach.ui.model.NewThreadViewModel
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
@@ -18,38 +17,25 @@ import org.openapitools.client.models.Board
  * Создание нового треда на доске: композер с обязательным файлом в ОП-посте.
  * Открывается кнопкой «+ новый тред» на экране доски.
  *
- * На взрослой доске без подтверждения возраста композер неактивен — ровно так же,
- * как на доске с запрещённым постингом: гейт один [AdultAccess] на всё приложение.
+ * Доски категории «Взрослым» здесь ничем не отличаются: композер активен по общему
+ * правилу доски (`enable_posting`), без подтверждений возраста.
  */
 @Composable
 fun NewThreadScreen(
     board: Board,
     onCreated: (threadNum: Int, subject: String?) -> Unit,
-    onBack: () -> Unit,
-    adultAllowed: Boolean = true,
-    onAdultConfirmed: () -> Unit = {}
+    onBack: () -> Unit
 ) {
     val client: Client = koinInject()
     val viewModel = remember(board.id) { NewThreadViewModel(client) }
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var askAdult by remember(board.id) { mutableStateOf(false) }
 
     var comment by remember(board.id) { mutableStateOf("") }
     val commentFocus = remember { FocusRequester() }
 
-    val adultLocked = needsAdultConfirmation(board, adultAllowed)
-    val canPost = board.enablePosting && !adultLocked
-    val composerHint = when {
-        adultLocked -> "/${board.id}/ · 18+: подтвердите возраст, чтобы писать"
-        !board.enablePosting -> "/${board.id}/: постинг запрещён"
-        else -> null
-    }
-
-    // Открыли форму на взрослой доске без подтверждения возраста — сразу спрашиваем, а не ждём клика.
-    LaunchedEffect(board.id) {
-        if (adultLocked) askAdult = true
-    }
+    val canPost = board.enablePosting
+    val composerHint = if (!board.enablePosting) "/${board.id}/: постинг запрещён" else null
 
     LaunchedEffect(uiState.createdThread, uiState.postError) {
         when {
@@ -136,21 +122,5 @@ fun NewThreadScreen(
                 onCancel = { viewModel.cancelCaptcha() }
             )
         }
-    }
-
-    if (askAdult && adultLocked) {
-        AdultGateDialog(
-            title = "Доска «Взрослым»",
-            body = "Постинг на доске /${board.id}/ «${board.name}» доступен только для пользователей 18+. " +
-                "Подтвердите возраст, чтобы создать тред.",
-            onConfirm = {
-                askAdult = false
-                onAdultConfirmed()
-            },
-            onDismiss = {
-                askAdult = false
-                onBack()
-            }
-        )
     }
 }

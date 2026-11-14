@@ -6,13 +6,13 @@ import androidx.compose.runtime.toMutableStateList
 import org.openapitools.client.models.Board as ApiBoard
 
 /**
- * Экраны приложения: доска -> тред, плюс создание треда и поиск.
+ * Экраны приложения: доска -> тред, плюс создание треда.
+ *
+ * Отдельного маршрута поиска нет: поиск живёт там, где ищут — на главной он ищет доски,
+ * на экране доски — треды этой доски. Такой поиск не меняет место в навигации.
  */
 sealed interface AppRoute {
     data object Home : AppRoute
-
-    /** Поиск тредов и досок из строки поиска. */
-    data object Search : AppRoute
 
     data class Board(val board: ApiBoard) : AppRoute
 
@@ -42,15 +42,6 @@ class AppNavigator(startRoute: AppRoute = AppRoute.Home) {
 
     fun openBoard(board: ApiBoard) {
         push(AppRoute.Board(board))
-    }
-
-    /**
-     * Открыть поиск. Повторное нажатие лупы на экране поиска не плодит копии в стеке:
-     * возврат должен вести туда, откуда поиск открыли.
-     */
-    fun openSearch() {
-        if (stack.lastOrNull() == AppRoute.Search) return
-        push(AppRoute.Search)
     }
 
     fun openNewThread(board: ApiBoard) {

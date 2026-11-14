@@ -116,9 +116,9 @@ class SearchQuery {
     }
 
     /**
-     * Дебаунсер сработал: строка готова к фильтру. `debouncedQuery` запускает проход в
-     * [SearchViewModel], а фаза остаётся [SearchPhase.PENDING] до [markReady] — чтобы
-     * «ничего не найдено» не мелькало на кадр раньше результата.
+     * Дебаунсер сработал: строка готова к фильтру. `debouncedQuery` запускает проход фильтра
+     * на экране, а фаза остаётся [SearchPhase.PENDING] до [markReady] — чтобы «ничего
+     * не найдено» не мелькало на кадр раньше результата.
      */
     fun accept(query: String) {
         state.update { current ->

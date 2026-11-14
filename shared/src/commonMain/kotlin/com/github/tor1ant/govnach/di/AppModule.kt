@@ -5,7 +5,6 @@ import com.github.tor1ant.govnach.ui.media.MediaImageLoader
 import com.github.tor1ant.govnach.ui.media.MediaUrlResolver
 import com.github.tor1ant.govnach.ui.media.platformMediaOpener
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
-import com.github.tor1ant.govnach.ui.search.SearchViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -54,10 +53,4 @@ val appModule = module {
     single { platformMediaOpener() }
     single { Client(get()) }
     single { HomeViewModel(client = get()) }
-
-    /**
-     * Поиск живёт всё время работы приложения: кэш тредов по доскам — самое дорогое,
-     * что есть в приложении, и терять его при выходе из поиска незачем.
-     */
-    single { SearchViewModel(client = get()) }
 }

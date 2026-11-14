@@ -12,28 +12,68 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.tor1ant.govnach.client.isAdult
-import com.github.tor1ant.govnach.ui.model.AdultAccess
 import com.github.tor1ant.govnach.ui.model.HomeViewModel
+import com.github.tor1ant.govnach.ui.model.filterCategories
+import com.github.tor1ant.govnach.ui.model.filteredBoards
+import com.github.tor1ant.govnach.ui.search.AppSearchBar
 import com.github.tor1ant.govnach.ui.search.SearchActionButton
+import com.github.tor1ant.govnach.ui.search.searchBoards
+import com.github.tor1ant.govnach.ui.search.searchTerms
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
 
+/**
+ * Главная: список всех досок и фильтр по категориям.
+ *
+ * Поиск здесь ищет **только доски** — доска открывается внутрь, и поиск тредов живёт уже
+ * на экране доски ([BoardScreen]). Строку поиска открывает лупа в шапке; пока она набрана,
+ * фильтр категорий уступает ей место, чтобы не искать по двум ограничениям сразу.
+ */
 @Composable
 fun HomeScreen(
-    onBoardClick: (Board) -> Unit = {},
-    onSearchClick: () -> Unit = {}
+    onBoardClick: (Board) -> Unit = {}
 ) {
     val viewModel: HomeViewModel = koinInject()
     val uiState by viewModel.uiState.collectAsState()
-    var askAdult by remember { mutableStateOf(false) }
+
+    // Поиск досок раскрыт: лупа в шапке превратилась в строку ввода.
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+
+    val terms = searchTerms(query)
+    // Обе величины выводятся из uiState — единственного источника, который экран наблюдает.
+    val allBoards = uiState.filteredBoards()
+    val foundBoards = if (terms.isEmpty()) {
+        allBoards
+    } else {
+        searchBoards(allBoards, terms).map { it.board }
+    }
+
+    fun closeSearch() {
+        searching = false
+        query = ""
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            AppTopBar(
-                title = { HomeTopBarTitle() },
-                actions = { SearchActionButton(onClick = onSearchClick) }
-            )
+            if (searching) {
+                AppSearchBar(
+                    query = query,
+                    onQueryChange = { query = it },
+                    hint = "Поиск досок",
+                    isSearching = false,
+                    onSubmit = {},
+                    onClear = { query = "" },
+                    autoFocus = true,
+                    onClose = ::closeSearch
+                )
+            } else {
+                AppTopBar(
+                    title = { HomeTopBarTitle() },
+                    actions = { SearchActionButton(onClick = { searching = true }) }
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -63,42 +103,28 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        // Фильтр по категориям
-                        CategoryFilter(
-                            categories = viewModel.getCategories(),
-                            selectedCategory = uiState.selectedCategory,
-                            onCategorySelected = { viewModel.selectCategory(it) }
-                        )
-
-                        // Доски 18+ спрятаны до подтверждения возраста: подсказка вместо списка
-                        if (uiState.adultAccess == AdultAccess.HIDDEN) {
-                            AdultBoardsNotice(
-                                hiddenBoards = uiState.hiddenAdultBoards,
-                                onEnable = { askAdult = true }
+                        // Фильтр по категориям уступает место результатам поиска:
+                        // искать «в категории» и «по строке» одновременно — не то, чего ждут.
+                        if (!searching) {
+                            CategoryFilter(
+                                categories = uiState.filterCategories(),
+                                selectedCategory = uiState.selectedCategory,
+                                onCategorySelected = { viewModel.selectCategory(it) }
                             )
-                        } else {
-                            AdultBoardsHideRow(onHide = { viewModel.hideAdult() })
                         }
 
                         // Список досок
                         BoardsList(
-                            boards = viewModel.getFilteredBoards(),
-                            onBoardClick = onBoardClick
+                            boards = foundBoards,
+                            onBoardClick = { board ->
+                                closeSearch()
+                                onBoardClick(board)
+                            }
                         )
                     }
                 }
             }
         }
-    }
-
-    if (askAdult) {
-        AdultGateDialog(
-            onConfirm = {
-                askAdult = false
-                viewModel.allowAdult()
-            },
-            onDismiss = { askAdult = false }
-        )
     }
 }
 
@@ -109,29 +135,6 @@ fun HomeScreen(
 @Composable
 private fun HomeTopBarTitle() {
     AppLogo(modifier = Modifier.height(AppLogoHeight))
-}
-
-/**
- * Пока взрослые доски разрешены — маленькая строка, чтобы их можно было спрятать обратно.
- */
-@Composable
-private fun AdultBoardsHideRow(onHide: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "Доски 18+ показаны",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        TextButton(onClick = onHide) {
-            Text("Скрыть")
-        }
-    }
 }
 
 @Composable

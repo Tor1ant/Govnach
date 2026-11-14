@@ -35,8 +35,6 @@ import com.github.tor1ant.govnach.ui.media.mediaPlatformContext
 import com.github.tor1ant.govnach.ui.model.ThreadViewModel
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import com.github.tor1ant.govnach.client.Client
-import com.github.tor1ant.govnach.client.isAdult
-import com.github.tor1ant.govnach.client.needsAdultConfirmation
 import org.koin.compose.koinInject
 import org.openapitools.client.models.Board
 import org.openapitools.client.models.FileModel
@@ -46,11 +44,9 @@ import org.openapitools.client.models.Post
  * Тред: посты от ОП-поста до последнего плюс композер ответа.
  * Открыть его можно с экрана доски.
  *
- * На доске «для взрослых» без подтверждения возраста тред не грузится и композер выключен;
- * заглушка предлагает подтвердить возраст. [onAdultConfirmed] == null — подтвердить отсюда
- * нечем (экран открыт напрямую), тогда кнопка ведёт назад.
- * Если доска взрослая, а у файлов нет флага `nsfw` (двач его заполняет не везде),
- * превью всё равно стартуют размытыми: [FileThumb] получает [adultBoard].
+ * Доски категории «Взрослым» ничем не отличаются от остальных: тред грузится сразу,
+ * композер доступен по общему правилу доски (`enable_posting`), а превью файлов
+ * показываются без размытия.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -58,13 +54,9 @@ fun ThreadScreen(
     board: Board,
     threadNum: Int,
     threadSubject: String = "",
-    onBack: () -> Unit,
-    adultAllowed: Boolean = true,
-    onAdultConfirmed: (() -> Unit)? = null
+    onBack: () -> Unit
 ) {
     val boardId = board.id
-    val adultBoard = board.isAdult()
-    val adultLocked = needsAdultConfirmation(board, adultAllowed)
     val mediaOpener: PlatformMediaOpener = koinInject()
     val mediaContext = mediaPlatformContext
     val client: Client = koinInject()
@@ -78,10 +70,8 @@ fun ThreadScreen(
     // Открывают его кнопка «ответить в тред» в шапке или клик по номеру поста.
     var composerOpen by remember(boardId, threadNum) { mutableStateOf(false) }
 
-    // До подтверждения возраста тред не запрашиваем вовсе: контент не должен приезжать в память
-    // и на экран раньше решения. Как только гейт пройден, загрузка стартует.
-    LaunchedEffect(boardId, threadNum, adultLocked) {
-        if (!adultLocked) viewModel.loadPosts()
+    LaunchedEffect(boardId, threadNum) {
+        viewModel.loadPosts()
     }
 
     // Просмотр медиа живёт поверх треда в собственном окне (на desktop — окне ОС),
@@ -102,10 +92,9 @@ fun ThreadScreen(
     }
 
     val threadClosed = uiState.posts.firstOrNull()?.closed?.let { it > 0 } ?: false
-    val canReply = board.enablePosting && !adultLocked && !threadClosed &&
+    val canReply = board.enablePosting && !threadClosed &&
         !uiState.isLoading && uiState.posts.isNotEmpty()
     val composerHint = when {
-        adultLocked -> "/$boardId/: 18+ · подтвердите возраст, чтобы отвечать"
         !board.enablePosting -> "/$boardId/: постинг запрещён"
         threadClosed -> "Тред закрыт: отвечать нельзя"
         else -> null
@@ -182,14 +171,6 @@ fun ThreadScreen(
                             .weight(1f)
                     ) {
                         when {
-                            adultLocked -> {
-                                AdultLockedState(
-                                    boardName = boardId,
-                                    onUnlock = onAdultConfirmed ?: onBack,
-                                    modifier = Modifier.align(Alignment.Center)
-                                )
-                            }
-
                             uiState.isLoading -> {
                                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                             }
@@ -210,7 +191,6 @@ fun ThreadScreen(
                                     items(uiState.posts, key = { it.num }) { post ->
                                         PostCard(
                                             post = post,
-                                            adultBoard = adultBoard,
                                             onImageClick = { viewingFile = it },
                                             onVideoClick = { playingFile = it },
                                             onExternalClick = { file ->
@@ -298,9 +278,7 @@ fun PostCard(
     onImageClick: (FileModel) -> Unit = {},
     onVideoClick: (FileModel) -> Unit = {},
     onExternalClick: (FileModel) -> Unit = {},
-    onReplyTo: (() -> Unit)? = null,
-    /** Тред на доске «для взрослых»: превью без `nsfw` тоже стартуют размытыми. */
-    adultBoard: Boolean = false
+    onReplyTo: (() -> Unit)? = null
 ) {
     val isOp = post.parent == 0
     val comment = post.comment.htmlToPlainText()
@@ -409,7 +387,6 @@ fun PostCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 PostMedia(
                     files = files,
-                    adultBoard = adultBoard,
                     onImageClick = onImageClick,
                     onVideoClick = onVideoClick,
                     onExternalClick = onExternalClick
@@ -435,19 +412,18 @@ private fun PostMedia(
     files: List<FileModel>,
     onImageClick: (FileModel) -> Unit,
     onVideoClick: (FileModel) -> Unit,
-    onExternalClick: (FileModel) -> Unit,
-    adultBoard: Boolean = false
+    onExternalClick: (FileModel) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         files.forEach { file ->
             when (file.kind()) {
                 FileKind.Image -> {
-                    FileThumb(file = file, onClick = { onImageClick(file) }, adultBoard = adultBoard)
+                    FileThumb(file = file, onClick = { onImageClick(file) })
                     FileMetaLine(file = file, extra = file.duration.orEmpty().ifEmpty { null })
                 }
 
                 FileKind.Video -> {
-                    FileThumb(file = file, onClick = { onVideoClick(file) }, adultBoard = adultBoard)
+                    FileThumb(file = file, onClick = { onVideoClick(file) })
                     FileMetaLine(
                         file = file,
                         extra = buildString {
@@ -458,7 +434,7 @@ private fun PostMedia(
                 }
 
                 FileKind.Sticker -> {
-                    FileThumb(file = file, onClick = { onImageClick(file) }, adultBoard = adultBoard)
+                    FileThumb(file = file, onClick = { onImageClick(file) })
                     FileMetaLine(file = file, extra = "🃏 стикер")
                 }
 

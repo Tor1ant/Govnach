@@ -1,6 +1,5 @@
 package com.github.tor1ant.govnach.ui.search
 
-import com.github.tor1ant.govnach.client.isAdult
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.openapitools.client.models.Board
 import org.openapitools.client.models.ThreadPreview
@@ -102,10 +101,6 @@ fun threadHaystacks(thread: ThreadPreview): ThreadHaystacks =
  */
 fun boardHaystack(board: Board): String =
     normalizeForSearch("/${board.id}/ ${board.name} ${board.category}")
-
-/** Видна ли доска в поиске: взрослые прячем, пока возраст не подтверждён. */
-fun visibleForSearch(board: Board, adultAllowed: Boolean): Boolean =
-    adultAllowed || !board.isAdult()
 
 private val WHITESPACE_REGEX = Regex("\\s+")
 private val NONE = Int.MIN_VALUE

@@ -40,14 +40,62 @@ object BoardOrder : Comparator<BoardHit> {
 }
 
 /**
- * Треды, подходящие под запрос.
- *
- * [threadsByBoard] — треды, уже прочитанные с сервера ([SearchViewModel] держит их в памяти,
- * чтобы не ходить в сеть на каждый символ). Взрослые доски отсекает вызывающая сторона —
- * те же правила, что и у списка на главной.
- *
  * Совпадение засчитывается, когда присутствуют **все** слова запроса: слово из темы и слово
  * из поста вместе тоже считаются совпадением, искать в одном поле два разных слова незачем.
+ */
+fun searchThreads(
+    threads: List<ThreadPreview>,
+    terms: List<String>
+): List<ThreadHit> {
+    if (terms.isEmpty()) return emptyList()
+
+    return threads
+        .mapNotNull { thread ->
+            val haystacks = threadHaystacks(thread)
+            if (!matchesAllFields(haystacks, terms)) return@mapNotNull null
+
+            ThreadHit(
+                board = boardOf(thread),
+                thread = thread,
+                rank = rankMatch(haystacks.title, haystacks.text, terms)
+            )
+        }
+        .sortedWith(ThreadOrder)
+}
+
+/** Id доски из полей самого треда — для выдачи, где доска не передана явно. */
+private fun boardOf(thread: ThreadPreview): Board = Board(
+    id = thread.board,
+    name = thread.board,
+    category = "",
+    info = "",
+    infoOuter = "",
+    threadsPerPage = 0,
+    bumpLimit = 0,
+    maxPages = 0,
+    defaultName = "",
+    enableNames = false,
+    enableTrips = false,
+    enableSubject = false,
+    enableSage = false,
+    enableIcons = false,
+    enableFlags = false,
+    enableDices = false,
+    enableShield = false,
+    enableThreadTags = false,
+    enablePosting = false,
+    enableLikes = false,
+    enableOekaki = false,
+    fileTypes = emptyList(),
+    maxComment = 0,
+    maxFilesSize = 0
+)
+
+/**
+ * Треды с доской, на которой они лежат.
+ *
+ * [threadsByBoard] — треды, уже прочитанные с сервера; в сеть фильтр не ходит.
+ * Вызывающая сторона не передаёт доски, по которым искать не надо, — фильтра по ним здесь нет.
  */
 fun searchThreads(
     threadsByBoard: Map<Board, List<ThreadPreview>>,
@@ -73,17 +121,12 @@ fun searchThreads(
     return hits.sortedWith(ThreadOrder)
 }
 
-/** Доски, подходящие под запрос. Взрослые доски — только после подтверждения возраста. */
-fun searchBoards(
-    boards: List<Board>,
-    terms: List<String>,
-    adultAllowed: Boolean
-): List<BoardHit> {
+/** Доски, подходящие под запрос: совпадение в id, названии или категории. */
+fun searchBoards(boards: List<Board>, terms: List<String>): List<BoardHit> {
     if (terms.isEmpty()) return emptyList()
 
     return boards
         .asSequence()
-        .filter { visibleForSearch(it, adultAllowed) }
         .map { board ->
             val haystack = boardHaystack(board)
             BoardHit(board, haystack, rankMatch(haystack, "", terms))
