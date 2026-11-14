@@ -11,7 +11,13 @@ import org.openapitools.client.models.Board
  */
 const val ADULT_CATEGORY = "Взрослым"
 
-/** Доска, которая требует подтверждения возраста и разрешения на контент 18+. */
+/**
+ * Доска категории «Взрослым».
+ *
+ * Это только метка для оформления — значок и цвет категории в списках. Доступ она больше
+ * не ограничивает: взрослые доски лежат в общем списке, открываются, читаются и принимают посты
+ * наравне с остальными.
+ */
 fun Board.isAdult(): Boolean = category.trim().startsWith(ADULT_CATEGORY, ignoreCase = true)
 
 /** Категории досок без повторов и пустых значений, в алфавитном порядке — для фильтра на главной. */
@@ -20,20 +26,3 @@ fun boardsCategories(boards: List<Board>): List<String> =
         .filter { it.isNotEmpty() }
         .distinct()
         .sorted()
-
-/** Нужно ли спрашивать подтверждение «мне есть 18» при открытии доски. */
-fun needsAdultConfirmation(board: Board, adultConfirmed: Boolean): Boolean =
-    board.isAdult() && !adultConfirmed
-
-/**
- * Взрослый ли контент показан в файле.
- *
- * У файлов есть поле `nsfw`, но двач заполняет его не на всех досках. На доске «для взрослых»
- * поля может не быть вовсе, поэтому в треде такой доски превью считаем взрослым до явного
- * действия пользователя: размытие снимается тапом по превью.
- */
-fun isAdultContent(fileNsfw: Int?, adultBoard: Boolean = false): Boolean =
-    when {
-        fileNsfw != null -> fileNsfw >= 0
-        else -> adultBoard
-    }

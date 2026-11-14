@@ -62,6 +62,8 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            // Виртуальное время для дебаунса поиска: проверяем паузу в 500 мс без реального ожидания.
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 

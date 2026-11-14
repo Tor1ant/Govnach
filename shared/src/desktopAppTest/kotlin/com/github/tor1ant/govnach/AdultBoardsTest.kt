@@ -3,8 +3,6 @@ package com.github.tor1ant.govnach
 import com.github.tor1ant.govnach.client.ADULT_CATEGORY
 import com.github.tor1ant.govnach.client.boardsCategories
 import com.github.tor1ant.govnach.client.isAdult
-import com.github.tor1ant.govnach.client.isAdultContent
-import com.github.tor1ant.govnach.client.needsAdultConfirmation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -13,7 +11,10 @@ import org.openapitools.client.models.Board
 
 /**
  * Взрослые доски определяются по категории из апи, а не по id: список досок в апи меняется,
- * а категория «Взрослым» единственный признак, который даёт сервер.
+ * а категория «Взрослым» — единственный признак, который даёт сервер.
+ *
+ * Признак нужен только чтобы пометить карточку значком 🔞. Доступ она не ограничивает:
+ * гейта «мне есть 18» и размытия файлов в приложении больше нет.
  */
 class AdultBoardsTest {
 
@@ -53,7 +54,7 @@ class AdultBoardsTest {
     fun adultsAreDetectedByCategory() {
         assertTrue(sex.isAdult(), "«Взрослым» — взрослая доска")
         assertTrue(fag.isAdult())
-        assertFalse(b.isAdult(), "обычная доска не должна попадать в гейт")
+        assertFalse(b.isAdult(), "обычная доска не должна помечаться как взрослая")
     }
 
     @Test
@@ -66,32 +67,11 @@ class AdultBoardsTest {
     }
 
     @Test
-    fun confirmationRequiredUntilAllowed() {
-        assertTrue(needsAdultConfirmation(sex, adultConfirmed = false))
-        assertFalse(needsAdultConfirmation(sex, adultConfirmed = true))
-        assertFalse(needsAdultConfirmation(b, adultConfirmed = false), "обычные доски без гейта")
-    }
-
-    @Test
     fun adultCategoryAppearsInCategoriesWithBoards() {
+        // Категория «Взрослым» — обычная строка фильтра, рядом с остальными и без гейта.
         val categories = boardsCategories(listOf(sex, fag, b, board("d", "Разное"), board("e", "")))
 
         assertEquals(listOf("Взрослым", "Разное"), categories, "без повторов и пустых, по алфавиту")
         assertEquals(ADULT_CATEGORY, categories.first(), "константа совпадает с категорией апи")
-    }
-
-    @Test
-    fun fileNsfwFlagWinsOverBoardKind() {
-        // Флаг от двача главнее: 0 и положительные — взрослый файл, отрицательный — явно без флага.
-        assertTrue(isAdultContent(fileNsfw = 0))
-        assertTrue(isAdultContent(fileNsfw = 1))
-        assertFalse(isAdultContent(fileNsfw = -1))
-        assertFalse(isAdultContent(fileNsfw = -1, adultBoard = true), "явная метка «не nsfw» важнее доски")
-    }
-
-    @Test
-    fun emptyNsfwOnAdultBoardIsTreatedAsAdult() {
-        assertTrue(isAdultContent(fileNsfw = null, adultBoard = true), "на /sex/ поле nsfw часто пустое")
-        assertFalse(isAdultContent(fileNsfw = null, adultBoard = false), "на обычной доске без флага не размываем")
     }
 }

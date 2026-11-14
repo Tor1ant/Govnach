@@ -6,7 +6,10 @@ import androidx.compose.runtime.toMutableStateList
 import org.openapitools.client.models.Board as ApiBoard
 
 /**
- * Экраны приложения: доска -> тред, плюс отдельный экран создания треда.
+ * Экраны приложения: доска -> тред, плюс создание треда.
+ *
+ * Отдельного маршрута поиска нет: поиск живёт там, где ищут — на главной он ищет доски,
+ * на экране доски — треды этой доски. Такой поиск не меняет место в навигации.
  */
 sealed interface AppRoute {
     data object Home : AppRoute

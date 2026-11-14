@@ -10,14 +10,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.github.tor1ant.govnach.client.isAdultContent
 import com.github.tor1ant.govnach.ui.util.htmlToPlainText
 import org.koin.compose.koinInject
 import org.openapitools.client.models.FileModel
@@ -69,8 +67,9 @@ private fun MediaImageLoader.observe(url: String): State<ImageBitmap?> = produce
 }
 
 /**
- * Превью файла. Взрослый ли контент, решает [isAdultContent]: флаг `nsfw` от двача,
- * а если его нет — признак взрослой доски ([adultBoard]). Взрослое превью размыто до тапа.
+ * Превью файла. Показывается как есть: ни флаг `nsfw`, ни принадлежность доски к категории
+ * «Взрослым» картинку не прячут и не размывают. Тап сразу открывает файл,
+ * долгое нажатие — тоже открытие.
  */
 @Composable
 fun FileThumb(
@@ -78,12 +77,8 @@ fun FileThumb(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     maxThumbWidth: Float = 250f,
-    maxThumbHeight: Float = 180f,
-    adultBoard: Boolean = false
+    maxThumbHeight: Float = 180f
 ) {
-    val adult = isAdultContent(file.nsfw, adultBoard)
-    var revealed by remember(file, adult) { mutableStateOf(!adult) }
-
     val tnUrl = MediaPaths.thumbnail(file)
     val tnWidth = file.tnWidth.takeIf { it > 0 } ?: file.width
     val tnHeight = file.tnHeight.takeIf { it > 0 } ?: file.height
@@ -95,30 +90,15 @@ fun FileThumb(
             .height(boxHeight.dp)
             .clip(RoundedCornerShape(8.dp))
             .pointerInput(file) {
-                detectTapGestures(
-                    onTap = { if (!revealed) revealed = true else onClick() },
-                    onLongPress = { if (revealed) onClick() }
-                )
+                detectTapGestures(onTap = { onClick() })
             }
     ) {
         AsyncMediaImage(
             url = tnUrl,
             aspectRatio = aspectRatioOf(tnWidth, tnHeight),
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (revealed) Modifier else Modifier.blur(18.dp)),
+            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit
         )
-
-        if (!revealed) {
-            Text(
-                text = "🔞 nsfw",
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(4.dp)
-            )
-        }
     }
 }
 
