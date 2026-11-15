@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.github.tor1ant.govnach.ui.BoardScreen
+import com.github.tor1ant.govnach.ui.ConsoleScreen
 import com.github.tor1ant.govnach.ui.HomeScreen
 import com.github.tor1ant.govnach.ui.NewThreadScreen
 import com.github.tor1ant.govnach.ui.StartupScreen
@@ -57,8 +58,11 @@ fun App(
             } else {
                 when (val route = navigator.currentRoute) {
                     AppRoute.Home -> HomeScreen(
-                        onBoardClick = { board -> navigator.openBoard(board) }
+                        onBoardClick = { board -> navigator.openBoard(board) },
+                        onConsoleClick = { navigator.openConsole() }
                     )
+
+                    AppRoute.Console -> ConsoleScreen(onBack = { navigator.back() })
 
                     is AppRoute.Board -> BoardScreen(
                         board = route.board,

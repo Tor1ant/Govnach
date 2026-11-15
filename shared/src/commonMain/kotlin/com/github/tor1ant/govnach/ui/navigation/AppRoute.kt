@@ -24,6 +24,9 @@ sealed interface AppRoute {
         val threadNum: Int,
         val threadSubject: String = ""
     ) : AppRoute
+
+    /** Встроенная консоль: журнал запросов и ошибок. */
+    data object Console : AppRoute
 }
 
 /**
@@ -59,6 +62,11 @@ class AppNavigator(startRoute: AppRoute = AppRoute.Home) {
 
     fun openThread(board: ApiBoard, threadNum: Int, threadSubject: String = "") {
         push(AppRoute.Thread(board, threadNum, threadSubject))
+    }
+
+    /** Консоль не открывается из консоли: повторное нажатие не плодит экраны. */
+    fun openConsole() {
+        if (stack.lastOrNull() !is AppRoute.Console) push(AppRoute.Console)
     }
 
     fun back() {

@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +47,7 @@ import io.github.kdroidfilter.composemediaplayer.VideoPlayerState
 import io.github.kdroidfilter.composemediaplayer.VideoPlayerSurface
 import io.github.kdroidfilter.composemediaplayer.createVideoPlayerState
 import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
 
 /**
  * Видеоплеер треда. Рендерится внутри Compose: на Android кадры идут через media3,
@@ -64,6 +66,13 @@ fun VideoPlayer(
     active: Boolean = true,
     onVideoSize: ((Int, Int) -> Unit)? = null
 ) {
+    // Плеер не умеет передавать заголовки, поэтому файлы закрытых разделов сначала
+    // скачиваются клиентом приложения — он знает ключ доступа (см. MediaSourceResolver).
+    val sources: MediaSourceResolver = koinInject()
+    val playable by produceState(initialValue = url, key1 = url) {
+        value = sources.playable(url)
+    }
+
     // Освобождение берём на себя: библиотечный rememberVideoPlayerState освобождает плеер
     // мгновенно, а если в этот момент ещё идёт открытие файла, нативный слой на Windows падает.
     // Поэтому createVideoPlayerState + отсроченное освобождение через [VideoPlayerReaper].
@@ -72,9 +81,9 @@ fun VideoPlayer(
         onDispose { VideoPlayerReaper.reap(playerState) }
     }
 
-    LaunchedEffect(url, active) {
+    LaunchedEffect(playable, active) {
         if (active) {
-            playerState.openUri(url)
+            playerState.openUri(playable)
         } else {
             playerState.pause()
         }

@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -126,6 +127,51 @@ fun AppSearchBar(
 fun SearchActionButton(onClick: () -> Unit) {
     IconButton(onClick = onClick) {
         SearchGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * Кнопка консоли для шапки главной: три полоски, как у значка терминала.
+ * Иконки не тянем — рисуем сами, как и остальные глифы.
+ */
+@Composable
+fun ConsoleActionButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        ConsoleGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Значок консоли: три горизонтальные полоски текста в рамке. */
+@Composable
+internal fun ConsoleGlyph(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(18.dp)) {
+        val stroke = size.minDimension * 0.1f
+        val left = size.width * 0.14f
+        val right = size.width * 0.86f
+
+        // Рамка терминала.
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(left, size.height * 0.14f),
+            size = androidx.compose.ui.geometry.Size(right - left, size.height * 0.72f),
+            cornerRadius = CornerRadius(size.minDimension * 0.12f),
+            style = Stroke(stroke)
+        )
+        // Строки «вывода»: первая короче, вторая длиннее — как обычный лог.
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.28f, size.height * 0.38f),
+            end = Offset(size.width * 0.5f, size.height * 0.38f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.28f, size.height * 0.6f),
+            end = Offset(size.width * 0.72f, size.height * 0.6f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
     }
 }
 

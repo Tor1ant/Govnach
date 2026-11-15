@@ -63,6 +63,7 @@ class ThreadViewModel(
                     error = "Ошибка загрузки треда: ${e.message}",
                     isLoading = false
                 )
+                client.log().failure("Тред /$boardId/$threadNum", "не удалось загрузить посты", e)
             }
         }
     }

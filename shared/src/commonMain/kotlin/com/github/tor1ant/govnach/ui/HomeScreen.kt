@@ -16,6 +16,7 @@ import com.github.tor1ant.govnach.ui.model.HomeViewModel
 import com.github.tor1ant.govnach.ui.model.filterCategories
 import com.github.tor1ant.govnach.ui.model.filteredBoards
 import com.github.tor1ant.govnach.ui.search.AppSearchBar
+import com.github.tor1ant.govnach.ui.search.ConsoleActionButton
 import com.github.tor1ant.govnach.ui.search.SearchActionButton
 import com.github.tor1ant.govnach.ui.search.searchBoards
 import com.github.tor1ant.govnach.ui.search.searchTerms
@@ -31,7 +32,8 @@ import org.openapitools.client.models.Board
  */
 @Composable
 fun HomeScreen(
-    onBoardClick: (Board) -> Unit = {}
+    onBoardClick: (Board) -> Unit = {},
+    onConsoleClick: () -> Unit = {}
 ) {
     val viewModel: HomeViewModel = koinInject()
     val uiState by viewModel.uiState.collectAsState()
@@ -71,7 +73,10 @@ fun HomeScreen(
             } else {
                 AppTopBar(
                     title = { HomeTopBarTitle() },
-                    actions = { SearchActionButton(onClick = { searching = true }) }
+                    actions = {
+                        ConsoleActionButton(onClick = onConsoleClick)
+                        SearchActionButton(onClick = { searching = true })
+                    }
                 )
             }
         }

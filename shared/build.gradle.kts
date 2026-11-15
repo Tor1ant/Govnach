@@ -65,6 +65,14 @@ kotlin {
             // Виртуальное время для дебаунса поиска: проверяем паузу в 500 мс без реального ожидания.
             implementation(libs.kotlinx.coroutines.test)
         }
+        jvmTest.dependencies {
+            implementation(libs.ktor.client.mock)
+        }
+        named("desktopAppTest") {
+            dependencies {
+                implementation(libs.ktor.client.mock)
+            }
+        }
     }
 
     sourceSets {
