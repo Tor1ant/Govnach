@@ -131,6 +131,30 @@ class PostingValidationTest {
         assertTrue(exactlyLimit.isEmpty(), "ровно лимит — ещё можно: $exactlyLimit")
     }
 
+    /** Лимит доски считается по сумме вложений, а не по каждому файлу отдельно. */
+    @Test
+    fun fileLimitIsSumOfAllAttachments() {
+        // 1500 + 500 = 2000 байт: оба файла вместе ещё влезают в 2 КБ.
+        val twoSmallFiles = validatePosting(
+            rules = boardRules.copy(maxFilesKb = 2),
+            draft = replyDraft.copy(files = listOf("/tmp/cat.jpg", "/tmp/dog.jpg")),
+            fileOf = fakeFiles("/tmp/cat.jpg" to 1500L, "/tmp/dog.jpg" to 500L)
+        )
+        assertTrue(twoSmallFiles.isEmpty(), "два килобайта в сумме влезают: $twoSmallFiles")
+
+        // 1500 + 1100 = 2600 байт: каждый файл в лимите, но вместе — уже нет.
+        val overSum = validatePosting(
+            rules = boardRules.copy(maxFilesKb = 2),
+            draft = replyDraft.copy(files = listOf("/tmp/cat.jpg", "/tmp/dog.jpg")),
+            fileOf = fakeFiles("/tmp/cat.jpg" to 1500L, "/tmp/dog.jpg" to 1100L)
+        )
+        assertEquals(
+            listOf(PostingProblem.FILE_TOO_BIG),
+            overSum,
+            "каждый файл в лимите, но вместе — нет"
+        )
+    }
+
     @Test
     fun newThreadWithoutFileIsRejectedButReplyNeedsNoFile() {
         val problems = validatePosting(

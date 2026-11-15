@@ -261,6 +261,8 @@ fun validatePosting(
         problems += PostingProblem.COMMENT_TOO_LONG
     }
 
+    var totalBytes = 0L
+
     for (path in draft.files) {
         val extension = path.substringAfterLast('.', "").lowercase()
         val type = if (extension == "jpeg") "jpg" else extension
@@ -275,9 +277,13 @@ fun validatePosting(
             continue
         }
 
-        if (rules.maxFilesKb > 0 && file.sizeBytes > rules.maxFilesKb * BYTES_PER_KB) {
-            problems += PostingProblem.FILE_TOO_BIG
-        }
+        totalBytes += file.sizeBytes
+    }
+
+    // max_files_size у двача — лимит на весь пост, а не на каждый файл: несколько
+    // картинок вместе могут не пролезть, даже когда каждая по отдельности проходит.
+    if (rules.maxFilesKb > 0 && totalBytes > rules.maxFilesKb * BYTES_PER_KB) {
+        problems += PostingProblem.FILE_TOO_BIG
     }
 
     // ErrorEmptyOp: ОП-пост без файла двач не принимает.

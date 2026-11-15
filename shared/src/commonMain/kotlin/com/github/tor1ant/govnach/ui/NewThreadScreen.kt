@@ -90,7 +90,8 @@ fun NewThreadScreen(
                 contentAlignment = Alignment.TopCenter
             ) {
                 Text(
-                    text = "Двач не создаёт тред без файла: укажите путь к картинке или видео в композере ниже.",
+                    text = "Двач не создаёт тред без файла: перетащите картинку или видео в композер ниже " +
+                        "или выберите файл кнопкой 📎.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp)
