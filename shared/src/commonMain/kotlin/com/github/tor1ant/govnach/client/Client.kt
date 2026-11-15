@@ -309,11 +309,36 @@ private const val SNIPPET_LENGTH = 300
 
 class Client(
     private val client: DefaultApi,
-    private val log: AppLog = AppLog()
+    private val log: AppLog = AppLog(),
+    private val access: ServerAccessState = ServerAccessState()
 ) {
 
     /** Журнал этого клиента: консоль приложения показывает его записи. */
     fun log(): AppLog = log
+
+    /**
+     * Подтвердить возраст для «взрослых» досок.
+     *
+     * В браузере это делает окно «вам 18 лет?» в самом дваче. Приложению окно показать
+     * некому, поэтому подтверждение даётся кнопкой на экране доски и запоминается —
+     * после этого оно уходит в каждом запросе.
+     *
+     * Сам по себе этот флаг закрытые разделы не открывает: им нужен [setUserCodeAuth].
+     */
+    fun allowAdultContent() = access.allowAdult()
+
+    /**
+     * Ключ доступа к закрытым разделам.
+     *
+     * Двач выдаёт его после первого поста и хранит в cookie `usercode_auth`. Без ключа
+     * каталог `/h/`, `/ho/`, `/e/`, `/nf/`, `/fet/` и ещё нескольких досок отвечает
+     * HTTP 500; с ключом — обычным списком тредов. Значение приходит само после отправки
+     * поста, а этот метод позволяет вставить его вручную.
+     */
+    fun setAccessToken(token: String) = access.setUserCodeAuth(token)
+
+    /** Есть ли уже ключ доступа к закрытым разделам. */
+    fun hasAccessToken(): Boolean = access.snapshot().hasPostingKey
 
     suspend fun getBoards(): List<Board> {
         return readBody<List<Board>>("Список досок", client.apiMobileV2BoardsGet(), log)

@@ -124,7 +124,15 @@ fun BoardScreen(
                 uiState.error != null -> {
                     ErrorState(
                         message = uiState.error ?: "Неизвестная ошибка",
-                        onRetry = { viewModel.loadThreads() }
+                        onRetry = { viewModel.loadThreads() },
+                        // Закрытые разделы двач открывает только тем, кто уже постил:
+                        // без cookie usercode_auth каталог отвечает 500. Ключ вводится здесь
+                        // и запоминается, дальше он уходит в каждом запросе.
+                        secondaryAction = if (adultBoard) {
+                            { AccessTokenHelp(onSubmit = { viewModel.applyAccessToken(it) }) }
+                        } else {
+                            null
+                        }
                     )
                 }
 

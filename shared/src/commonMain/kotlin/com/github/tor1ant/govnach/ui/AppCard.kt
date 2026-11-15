@@ -63,7 +63,9 @@ fun AppCard(
 fun ErrorState(
     message: String,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Дополнительное действие под «Повторить»: сейчас это подтверждение возраста. */
+    secondaryAction: (@Composable () -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -81,6 +83,10 @@ fun ErrorState(
         Spacer(modifier = Modifier.height(12.dp))
         Button(onClick = onRetry) {
             Text("Повторить")
+        }
+        if (secondaryAction != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            secondaryAction()
         }
     }
 }

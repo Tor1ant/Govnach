@@ -51,4 +51,30 @@ class BoardViewModel(
             }
         }
     }
+
+    /**
+     * Подтвердить возраст и сразу перезагрузить доску.
+     *
+     * Так приложение повторяет то, что делает браузер: окно «18+» записывает `ageallow`,
+     * и дальше запросы идут уже с ним. Подтверждение запоминается между запусками.
+     */
+    fun allowAdultContent() {
+        client.allowAdultContent()
+        loadThreads()
+    }
+
+    /**
+     * Ввести ключ доступа к закрытым разделам и перезагрузить доску.
+     *
+     * Ключ — это cookie `usercode_auth`, которую двач выдаёт после первого поста.
+     * Браузер получает её сам, приложению её нужно один раз вставить руками.
+     */
+    fun applyAccessToken(token: String) {
+        if (token.isBlank()) return
+        client.setAccessToken(token)
+        loadThreads()
+    }
+
+    /** Есть ли уже ключ: от этого зависит, показывать ли поле ввода. */
+    fun hasAccessToken(): Boolean = client.hasAccessToken()
 }
