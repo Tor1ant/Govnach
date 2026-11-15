@@ -1,5 +1,6 @@
 package com.github.tor1ant.govnach.client
 
+import io.ktor.http.Cookie
 import java.util.concurrent.Executors
 import java.util.prefs.Preferences
 
@@ -47,6 +48,19 @@ data class ServerAccess(
         passcodeAuth?.takeIf { it.isNotBlank() }?.let { add("passcode_auth=$it") }
         userCode?.takeIf { it.isNotBlank() }?.let { add("usercode=$it") }
     }.joinToString("; ")
+
+    /**
+     * Те же подтверждения парами cookie — для [ServerAccessCookies].
+     *
+     * Домен и путь не задаём: `HttpCookies` сам решает, что с ними делать, а нам нужно,
+     * чтобы ключ уходил и после редиректа `2ch.hk → 2ch.su`.
+     */
+    fun cookies(): List<Cookie> = listOfNotNull(
+        ageAllow.takeIf { it }?.let { Cookie("ageallow", "1") },
+        userCodeAuth?.takeIf { it.isNotBlank() }?.let { Cookie("usercode_auth", it) },
+        passcodeAuth?.takeIf { it.isNotBlank() }?.let { Cookie("passcode_auth", it) },
+        userCode?.takeIf { it.isNotBlank() }?.let { Cookie("usercode", it) }
+    )
 
     /**
      * Учесть ответ сервера: если он прислал `Set-Cookie`, запоминаем то, что относится
