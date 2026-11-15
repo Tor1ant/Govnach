@@ -1,5 +1,6 @@
 package com.github.tor1ant.govnach.di
 
+import com.github.tor1ant.govnach.client.AppLog
 import com.github.tor1ant.govnach.client.Client
 import com.github.tor1ant.govnach.ui.media.MediaImageLoader
 import com.github.tor1ant.govnach.ui.media.MediaUrlResolver
@@ -51,6 +52,8 @@ val appModule = module {
     single { MediaImageLoader(get()) }
     single { MediaUrlResolver(get()) }
     single { platformMediaOpener() }
-    single { Client(get()) }
+    // Один журнал на всё приложение: клиент пишет в него, консоль его показывает.
+    single { AppLog() }
+    single { Client(get(), get()) }
     single { HomeViewModel(client = get()) }
 }

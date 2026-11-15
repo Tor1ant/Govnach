@@ -1,18 +1,119 @@
 package com.github.tor1ant.govnach.client
 
+import io.ktor.client.call.NoTransformationFoundException
+import io.ktor.client.call.body
 import io.ktor.client.request.forms.FormPart
 import io.ktor.client.request.forms.InputProvider
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 import org.openapitools.client.apis.DefaultApi
+import org.openapitools.client.infrastructure.HttpResponse
 import org.openapitools.client.models.ApiCaptchaEmojiClickPostRequest
 import org.openapitools.client.models.Board
+import org.openapitools.client.models.Captcha
 import org.openapitools.client.models.CaptchaType
+import org.openapitools.client.models.CatalogThreads
+import org.openapitools.client.models.EmojiCaptchaShow
 import org.openapitools.client.models.Error
+import org.openapitools.client.models.MobileThreadLastInfo
+import org.openapitools.client.models.MobileThreadPostsAfter
 import org.openapitools.client.models.Post
 import org.openapitools.client.models.ThreadPreview
+import org.openapitools.client.models.UserPostingPost200Response
 import java.io.File
 import java.security.MessageDigest
+
+/**
+ * Двач не отдал данные, к которым приложение умеет обращаться.
+ *
+ * Появляется, когда на месте JSON приходит что-то другое: например, `/h/catalog.json` отвечает
+ * HTML-страницей «Not found» со статусом 500, а `/fur/catalog.json` — HTML стороннего сайта
+ * со статусом 200. У Ktor в таком случае нет подходящего конвертера, он пропускает ответ как есть,
+ * и `body()` падает с [NoTransformationFoundException]. Наружу отдаём свою ошибку:
+ * в ней есть статус и содержимое ответа, а пользователь видит понятный текст вместо имени
+ * класса библиотеки.
+ */
+class ApiResponseException(
+    val status: Int,
+    val contentType: String?,
+    val snippet: String,
+    message: String,
+    cause: Throwable? = null
+) : Exception(message, cause)
+
+/**
+ * Как `/h/catalog.json` или `/fur/catalog.json`: ответ не разобрался как ожидаемая модель.
+ * Остальные ошибки конвертации (например, битый JSON) пробрасываем без изменений — это баг в модели.
+ */
+internal suspend fun noTransformation(
+    where: String,
+    e: NoTransformationFoundException,
+    response: io.ktor.client.statement.HttpResponse
+): ApiResponseException {
+    val contentType = response.contentType()?.toString()
+    val snippet = runCatching { response.body<kotlin.String>() }
+        .getOrNull()
+        .orEmpty()
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(SNIPPET_LENGTH)
+
+    return ApiResponseException(
+        status = response.status.value,
+        contentType = contentType,
+        snippet = snippet,
+        message = buildString {
+            append(where)
+            append(": сервер вернул не то, что ждёт приложение (HTTP ")
+            append(response.status.value)
+            contentType?.let {
+                append(", ")
+                append(it.substringBefore(';').trim())
+            }
+            append(")")
+            // Обрывок HTML бесполезен, поэтому для html показываем только статус.
+            if (snippet.isNotEmpty() && !snippet.startsWith("<!DOCTYPE", ignoreCase = true) &&
+                !snippet.startsWith("<html", ignoreCase = true)
+            ) {
+                append(". Ответ: ")
+                append(snippet)
+            }
+        },
+        cause = e
+    )
+}
+
+/**
+ * Как `HttpResponse.body()`, но неожиданный тип ответа превращается в [ApiResponseException].
+ * [where] — что именно грузили, чтобы текст ошибки был понятен без стека.
+ * Всё, что не разобралось, попадает в [log]: в консоли видно и запрос, и тело ответа.
+ *
+ * Не extension, а отдельная функция: `HttpResponse.body()` иначе перекрывает вызов, и
+ * разрешение перегрузок уходит по неверному пути.
+ */
+internal suspend inline fun <reified T> readBody(where: String, wrapper: HttpResponse<T>, log: AppLog): T =
+    try {
+        wrapper.body()
+    } catch (e: NoTransformationFoundException) {
+        val failure = noTransformation(where, e, wrapper.response)
+        log.error(
+            tag = "HTTP",
+            message = failure.message.orEmpty(),
+            detail = buildString {
+                append("статус: ")
+                append(failure.status)
+                append("\ncontent-type: ")
+                append(failure.contentType ?: "нет")
+                if (failure.snippet.isNotBlank()) {
+                    append("\nтело ответа:\n")
+                    append(failure.snippet)
+                }
+            }
+        )
+        throw failure
+    }
 
 /**
  * Ошибка, которую вернул двач в теле ответа (поле error при HTTP 200).
@@ -203,19 +304,36 @@ fun postingProblemsMessage(problems: List<PostingProblem>, rules: PostingRules):
 
 private const val BYTES_PER_KB = 1024L
 
+/** Сколько символов ответа сохраняем в [ApiResponseException.snippet]: хватает для текста ошибки. */
+private const val SNIPPET_LENGTH = 300
+
 class Client(
-    private val client: DefaultApi
+    private val client: DefaultApi,
+    private val log: AppLog = AppLog()
 ) {
 
+    /** Журнал этого клиента: консоль приложения показывает его записи. */
+    fun log(): AppLog = log
+
     suspend fun getBoards(): List<Board> {
-        return client.apiMobileV2BoardsGet().body()
+        return readBody<List<Board>>("Список досок", client.apiMobileV2BoardsGet(), log)
     }
 
     /**
      * Треды доски в порядке bump: прилепленные сверху, остальные как на доске.
+     *
+     * Основной и единственный источник — `/{board}/catalog.json` (HTML JSON API двача).
+     * У части досок категории «Взрослым» (`/h/`, `/ho/`, `/nf/`, `/e/`, `/fet/`) он не отвечает:
+     * вместо JSON приходит страница ошибки с HTTP 500, а `/fur/` отдаёт 302 на сторонний сайт.
+     * Это решение сервера, а не клиента: отдельного способа получить список тредов у апи нет
+     * (`/after` и `/info` работают только по известному номеру треда, а перечислить номера
+     * без каталога нечем). Поэтому доска показывает внятную ошибку, а не падение.
      */
     suspend fun getThreads(boardId: String): List<ThreadPreview> {
-        return client.boardCatalogJsonGet(boardId).body().threads.orEmpty()
+        val response = client.boardCatalogJsonGet(boardId)
+        // Без content negotiation ответ не разбирается, и body() падает на NoTransformationFoundException.
+        // Ловим только эту ошибку (см. [noTransformation]): остальные конвертации всё ещё должны падать.
+        return readBody<CatalogThreads>("Треды /$boardId/", response, log).threads.orEmpty()
     }
 
     /**
@@ -229,7 +347,8 @@ class Client(
         var from = threadNum
 
         while (posts.size < MAX_THREAD_POSTS) {
-            val response = client.apiMobileV2AfterBoardThreadNumGet(boardId, threadNum, from).body()
+            val response = client.apiMobileV2AfterBoardThreadNumGet(boardId, threadNum, from)
+                .let { readBody<MobileThreadPostsAfter>("Посты /$boardId/$threadNum", it, log) }
 
             response.error?.let { throw ApiException(it) }
 
@@ -247,7 +366,8 @@ class Client(
      * Краткая информация о треде: номер, время создания, количество постов.
      */
     suspend fun getThreadInfo(boardId: String, threadNum: Int): ThreadInfo {
-        val response = client.apiMobileV2InfoBoardThreadGet(boardId, threadNum).body()
+        val response = client.apiMobileV2InfoBoardThreadGet(boardId, threadNum)
+            .let { readBody<MobileThreadLastInfo>("Информация о /$boardId/$threadNum", it, log) }
 
         response.error?.let { throw ApiException(it) }
 
@@ -314,7 +434,7 @@ class Client(
                 appResponse = appResponseId?.let { sha256Hex("$it|$privateKey") },
                 emojiCaptchaId = emojiCaptchaId,
                 file = files
-            ).body()
+            ).let { readBody<UserPostingPost200Response>("Отправка поста", it, log) }
         } catch (e: kotlinx.serialization.SerializationException) {
             throw IllegalStateException("Апи вернул неожиданный ответ на отправку поста: ${e.message}", e)
         }
@@ -334,7 +454,7 @@ class Client(
     /** Новый id emoji капчи для доски и (опционально) треда. Живёт недолго — просим перед показом. */
     suspend fun requestEmojiCaptcha(boardId: String, threadNum: Int? = null): EmojiCaptcha {
         val response = try {
-            client.apiCaptchaEmojiIdGet(boardId, threadNum).body()
+            client.apiCaptchaEmojiIdGet(boardId, threadNum).let { readBody<Captcha>("Emoji капча /$boardId/", it, log) }
         } catch (e: kotlinx.serialization.SerializationException) {
             throw IllegalStateException("Апи не выдал emoji капчу: ${e.message}", e)
         }
@@ -348,7 +468,7 @@ class Client(
     /** Текущее состояние капчи: картинка с правильными emoji и клавиатура вариантов. */
     suspend fun showEmojiCaptcha(captchaId: String): EmojiCaptcha {
         val response = try {
-            client.apiCaptchaEmojiShowGet(captchaId).body()
+            client.apiCaptchaEmojiShowGet(captchaId).let { readBody<EmojiCaptchaShow>("Emoji капча", it, log) }
         } catch (e: kotlinx.serialization.SerializationException) {
             throw IllegalStateException("Апи не отдал состояние emoji капчи: ${e.message}", e)
         }
@@ -374,7 +494,7 @@ class Client(
                     captchaTokenID = captchaId,
                     emojiNumber = emojiNumber
                 )
-            ).body()
+            ).let { readBody<EmojiCaptchaShow>("Клик по emoji капче", it, log) }
         } catch (e: kotlinx.serialization.SerializationException) {
             throw IllegalStateException("Апи не принял клик по emoji капче: ${e.message}", e)
         }
@@ -393,7 +513,7 @@ class Client(
      */
     suspend fun getCaptchaAppId(publicKey: String, boardId: String, threadNum: Int? = null): String {
         val response = try {
-            client.apiCaptchaAppIdPublicKeyGet(publicKey, boardId, threadNum).body()
+            client.apiCaptchaAppIdPublicKeyGet(publicKey, boardId, threadNum).let { readBody<Captcha>("app_response_id", it, log) }
         } catch (e: kotlinx.serialization.SerializationException) {
             throw IllegalStateException(
                 "Апи капчи отказал: ключ не зарегистрирован или апи изменился (${e.message}). " +

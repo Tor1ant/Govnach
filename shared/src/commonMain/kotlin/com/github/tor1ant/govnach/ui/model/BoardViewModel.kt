@@ -47,6 +47,7 @@ class BoardViewModel(
                     error = "Ошибка загрузки тредов: ${e.message}",
                     isLoading = false
                 )
+                client.log().failure("Доска /${board.id}/", "не удалось загрузить треды", e)
             }
         }
     }

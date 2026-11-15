@@ -49,6 +49,7 @@ class HomeViewModel(
                     error = "Ошибка загрузки: ${e.message}",
                     isLoading = false
                 )
+                client.log().failure("Главная", "не удалось загрузить список досок", e)
             }
         }
     }
